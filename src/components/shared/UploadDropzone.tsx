@@ -19,9 +19,15 @@ export function UploadDropzone() {
       try {
         const buf = await file.arrayBuffer();
         const result = await parseSP2DExcel(buf, { filename: file.name });
-        await setPopulasi(result.rows, result.meta);
+        await setPopulasi(result.rows, result.meta, {
+          breakdown: result.breakdown ?? [],
+          populasiKoreksi: result.populasiKoreksi ?? [],
+          warnings: result.warnings ?? [],
+          fingerprint: result.fingerprint ?? null,
+        });
+        const fpFormat = result.fingerprint?.format ?? "GENERIC";
         toast.success(
-          `${result.rows.length} SP2D berhasil di-parse (auto-detect confidence: ${(result.detection.confidence * 100).toFixed(0)}%, skip ${result.skippedRowCount} baris).`,
+          `${result.rows.length} SP2D ter-parse · format ${fpFormat} · confidence ${(result.detection.confidence * 100).toFixed(0)}%`,
         );
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

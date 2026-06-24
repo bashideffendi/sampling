@@ -14,7 +14,20 @@ import type {
   AttributeParam,
   SamplingResult,
 } from "@/types";
+import type {
+  CanonicalSP2DRow,
+  BreakdownAkunRow,
+  ParseWarning,
+} from "@/lib/parser/canonical-row";
+import type { FingerprintResult } from "@/lib/parser/fingerprint";
 import { uid } from "@/lib/utils";
+
+export interface ParseExtras {
+  breakdown: BreakdownAkunRow[];
+  populasiKoreksi: CanonicalSP2DRow[];
+  warnings: ParseWarning[];
+  fingerprint: FingerprintResult | null;
+}
 
 interface DraftMeta {
   draftId: string;
@@ -97,7 +110,8 @@ interface SamplingStore {
 
   populasi: SP2DRow[] | null;
   populasiMeta: PopulasiMeta | null;
-  setPopulasi: (rows: SP2DRow[], meta: PopulasiMeta) => Promise<void>;
+  parseExtras: ParseExtras | null;
+  setPopulasi: (rows: SP2DRow[], meta: PopulasiMeta, extras?: ParseExtras) => Promise<void>;
   loadPopulasiFromCache: () => Promise<void>;
   clearPopulasi: () => Promise<void>;
 
@@ -136,6 +150,7 @@ export const useSamplingStore = create<SamplingStore>()(
           draftMeta: fresh,
           populasi: null,
           populasiMeta: null,
+          parseExtras: null,
           result: null,
           params: DEFAULT_PARAMS,
         });
@@ -143,13 +158,15 @@ export const useSamplingStore = create<SamplingStore>()(
 
       populasi: null,
       populasiMeta: null,
-      setPopulasi: async (rows, meta) => {
+      parseExtras: null,
+      setPopulasi: async (rows, meta, extras) => {
         const id = get().draftMeta.draftId;
         await idbSet(POPULASI_KEY(id), rows);
         await idbSet(META_KEY(id), meta);
         set({
           populasi: rows,
           populasiMeta: meta,
+          parseExtras: extras ?? null,
           params: {
             ...get().params,
             mus: { ...get().params.mus, bookValue: meta.totalNilai },
@@ -170,7 +187,7 @@ export const useSamplingStore = create<SamplingStore>()(
         const id = get().draftMeta.draftId;
         await idbDel(POPULASI_KEY(id));
         await idbDel(META_KEY(id));
-        set({ populasi: null, populasiMeta: null, result: null });
+        set({ populasi: null, populasiMeta: null, parseExtras: null, result: null });
       },
 
       method: "mus",

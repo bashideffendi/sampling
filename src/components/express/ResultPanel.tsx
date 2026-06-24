@@ -17,6 +17,7 @@ import type { MethodParam } from "@/types";
 export function ResultPanel() {
   const populasi = useSamplingStore((s) => s.populasi);
   const populasiMeta = useSamplingStore((s) => s.populasiMeta);
+  const parseExtras = useSamplingStore((s) => s.parseExtras);
   const method = useSamplingStore((s) => s.method);
   const params = useSamplingStore((s) => s.params);
   const draftMeta = useSamplingStore((s) => s.draftMeta);
@@ -47,7 +48,15 @@ export function ResultPanel() {
       entitas: draftMeta.entitas || "Entitas",
       tahun: draftMeta.tahun,
       draftId: draftMeta.draftId,
-      appVersion: "0.1.0",
+      appVersion: "0.2.0",
+      extras: parseExtras
+        ? {
+            breakdown: parseExtras.breakdown,
+            populasiKoreksi: parseExtras.populasiKoreksi,
+            warnings: parseExtras.warnings,
+            fingerprint: parseExtras.fingerprint ?? undefined,
+          }
+        : undefined,
     });
     downloadBlob(blob, makeFilename(result, { entitas: draftMeta.entitas, tahun: draftMeta.tahun }, "xlsx"));
   };

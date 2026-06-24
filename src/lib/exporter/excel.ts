@@ -1,21 +1,37 @@
 /**
- * Excel exporter — multi-sheet workbook hasil sampling.
+ * Excel exporter — multi-sheet workbook hasil sampling (v0.2).
  *
- * Sheet:
- *   1. Ringkasan     — parameter input + sample size + materialitas
- *   2. Daftar Sampel — list SP2D terpilih (frozen header, autofilter)
- *   3. Metodologi    — narasi siap-paste ke KKP
- *   4. Audit Trail   — hash, seed, RF source, timestamp
+ * Sheets:
+ *   1. Ringkasan          — parameter input + sample size + materialitas + fingerprint info
+ *   2. Daftar Sampel      — list SP2D terpilih (frozen header, autofilter)
+ *   3. Metodologi         — narasi siap-paste ke KKP
+ *   4. Audit Trail        — hash, seed, RF source, timestamp
+ *   5. Breakdown Akun     — (opsional) pecahan akun per SP2D, kalau source line-item
+ *   6. Populasi Koreksi   — (opsional) SP2D yang di-route koreksi (PFK/RETUR/etc)
+ *   7. Peringatan         — (opsional) parser warnings (subtotal stripped, sum mismatch, dll)
  *
  * Pakai ExcelJS (style/freeze/autofilter), bukan SheetJS.
  */
 
 import ExcelJS from "exceljs";
 import type { SamplingResult, PopulasiMeta, SeedBundle } from "@/types";
+import type {
+  CanonicalSP2DRow,
+  BreakdownAkunRow,
+  ParseWarning,
+} from "@/lib/parser/canonical-row";
+import type { FingerprintResult } from "@/lib/parser/canonical-row";
 import { narasiMetodologi } from "./narasi";
 
 const HEADER_FILL = "FF1F2937";
 const HEADER_FONT = "FFFFFFFF";
+
+export interface ExportExtras {
+  breakdown?: BreakdownAkunRow[];
+  populasiKoreksi?: CanonicalSP2DRow[];
+  warnings?: ParseWarning[];
+  fingerprint?: FingerprintResult;
+}
 
 export interface ExportOptions {
   entitas?: string;
@@ -23,6 +39,7 @@ export interface ExportOptions {
   filename?: string;
   appVersion?: string;
   draftId?: string;
+  extras?: ExportExtras;
 }
 
 export async function exportToExcel(
@@ -39,6 +56,17 @@ export async function exportToExcel(
   buildSampel(wb, result);
   buildMetodologi(wb, result, populasi, opts);
   buildAuditTrail(wb, result, populasi, opts);
+
+  const extras = opts.extras ?? {};
+  if (extras.breakdown && extras.breakdown.length > 0) {
+    buildBreakdown(wb, extras.breakdown);
+  }
+  if (extras.populasiKoreksi && extras.populasiKoreksi.length > 0) {
+    buildPopulasiKoreksi(wb, extras.populasiKoreksi);
+  }
+  if (extras.warnings && extras.warnings.length > 0) {
+    buildPeringatan(wb, extras.warnings);
+  }
 
   const buf = await wb.xlsx.writeBuffer();
   return new Blob([buf], {
@@ -60,6 +88,11 @@ function buildRingkasan(
   ws.getRow(1).eachCell((c) => styleHeader(c));
 
   const methodLabel = METHOD_LABEL[result.method];
+  const fp = opts.extras?.fingerprint;
+  const breakdownCount = opts.extras?.breakdown?.length ?? 0;
+  const koreksiCount = opts.extras?.populasiKoreksi?.length ?? 0;
+  const warnCount = opts.extras?.warnings?.length ?? 0;
+
   const rows: Array<[string, string | number]> = [
     ["Entitas Pemeriksaan", opts.entitas ?? "—"],
     ["Tahun Anggaran", opts.tahun ?? "—"],
@@ -71,6 +104,19 @@ function buildRingkasan(
     ["Median (Rp)", Math.round(populasi.medianNilai)],
     ["Min / Max (Rp)", `${populasi.minNilai} / ${populasi.maxNilai}`],
     ["Negatif / Nol", `${populasi.negativeCount} / ${populasi.zeroCount}`],
+  ];
+
+  if (fp) {
+    rows.push(["—", "—"]);
+    rows.push(["Format Terdeteksi", fp.format]);
+    rows.push(["Granularity Source", fp.granularity]);
+    rows.push(["Confidence Deteksi", Number(fp.confidence.toFixed(3))]);
+  }
+  if (breakdownCount > 0) rows.push(["Baris Breakdown Akun", breakdownCount]);
+  if (koreksiCount > 0) rows.push(["Baris Populasi Koreksi", koreksiCount]);
+  if (warnCount > 0) rows.push(["Jumlah Peringatan Parser", warnCount]);
+
+  rows.push(
     ["—", "—"],
     ["Sample Size", result.sampleSize],
     ["Reliability Factor / Z", result.reliabilityFactor ?? "—"],
@@ -81,11 +127,11 @@ function buildRingkasan(
     ["Hash SHA-256 Populasi", populasi.hashSha256],
     ["Computed At", result.computedAt],
     ["RF / Tabel Sumber", result.rfSource ?? "—"],
-  ];
+  );
   rows.forEach(([k, v]) => ws.addRow({ k, v }));
   if (result.warnings.length > 0) {
     ws.addRow({ k: "—", v: "—" });
-    ws.addRow({ k: "Peringatan", v: "" });
+    ws.addRow({ k: "Peringatan Sampling", v: "" });
     result.warnings.forEach((w, i) => ws.addRow({ k: `  • [${i + 1}]`, v: w }));
   }
   ws.getColumn("v").alignment = { wrapText: true, vertical: "top" };
@@ -162,7 +208,7 @@ function buildAuditTrail(
   ws.getRow(1).eachCell((c) => styleHeader(c));
   const entries: Array<[string, string | number]> = [
     ["App", "Cap Cip Cup"],
-    ["App Version", opts.appVersion ?? "0.1.0"],
+    ["App Version", opts.appVersion ?? "0.2.0"],
     ["Draft ID", opts.draftId ?? "—"],
     ["Computed At", result.computedAt],
     ["Seed (PRNG mulberry32)", result.seed],
@@ -171,8 +217,91 @@ function buildAuditTrail(
     ["Param JSON", JSON.stringify(result.param)],
     ["RF / Tabel Sumber", result.rfSource ?? "—"],
   ];
+  if (opts.extras?.fingerprint) {
+    entries.push(
+      ["Format Source", opts.extras.fingerprint.format],
+      ["Granularity Source", opts.extras.fingerprint.granularity],
+      ["Confidence Source", String(opts.extras.fingerprint.confidence)],
+    );
+  }
   entries.forEach(([k, v]) => ws.addRow({ k, v }));
   ws.getColumn("v").alignment = { wrapText: true, vertical: "top" };
+}
+
+function buildBreakdown(wb: ExcelJS.Workbook, breakdown: BreakdownAkunRow[]) {
+  const ws = wb.addWorksheet("Breakdown Akun");
+  ws.columns = [
+    { header: "No SP2D", key: "no_sp2d", width: 22 },
+    { header: "Kode Rekening", key: "kode_rek", width: 22 },
+    { header: "Uraian Akun", key: "uraian_akun", width: 50 },
+    { header: "Nilai Realisasi (Rp)", key: "nilai", width: 20 },
+  ];
+  ws.getRow(1).eachCell((c) => styleHeader(c));
+  ws.views = [{ state: "frozen", ySplit: 1 }];
+
+  breakdown.forEach((b) => {
+    ws.addRow({
+      no_sp2d: b.no_sp2d_normalized,
+      kode_rek: b.kode_rek ?? "",
+      uraian_akun: b.uraian_akun ?? "",
+      nilai: b.nilai_realisasi_akun,
+    });
+  });
+  ws.getColumn("nilai").numFmt = '_-"Rp" * #,##0_-;-"Rp" * #,##0_-;_-"Rp" * "-"??_-;_-@_-';
+  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 4 } };
+}
+
+function buildPopulasiKoreksi(wb: ExcelJS.Workbook, koreksi: CanonicalSP2DRow[]) {
+  const ws = wb.addWorksheet("Populasi Koreksi");
+  ws.columns = [
+    { header: "No SP2D", key: "no_sp2d", width: 22 },
+    { header: "Tanggal", key: "tgl", width: 14 },
+    { header: "Jenis Trx", key: "jenis", width: 12 },
+    { header: "Nilai (Rp)", key: "nilai", width: 20 },
+    { header: "OPD/SKPD", key: "skpd", width: 24 },
+    { header: "Penyedia", key: "penyedia", width: 26 },
+    { header: "Keterangan", key: "ket", width: 50 },
+  ];
+  ws.getRow(1).eachCell((c) => styleHeader(c));
+  ws.views = [{ state: "frozen", ySplit: 1 }];
+
+  koreksi.forEach((r) => {
+    ws.addRow({
+      no_sp2d: r.no_sp2d_normalized,
+      tgl: r.tgl_sp2d,
+      jenis: r.jenis_trx,
+      nilai: r.nilai_sp2d,
+      skpd: r.skpd ?? "",
+      penyedia: r.penyedia ?? "",
+      ket: r.keterangan ?? "",
+    });
+  });
+  ws.getColumn("nilai").numFmt = '_-"Rp" * #,##0_-;-"Rp" * #,##0_-;_-"Rp" * "-"??_-;_-@_-';
+  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 7 } };
+}
+
+function buildPeringatan(wb: ExcelJS.Workbook, warnings: ParseWarning[]) {
+  const ws = wb.addWorksheet("Peringatan");
+  ws.columns = [
+    { header: "Severity", key: "sev", width: 12 },
+    { header: "Tipe", key: "type", width: 26 },
+    { header: "Pesan", key: "msg", width: 70 },
+    { header: "Ref (JSON)", key: "ref", width: 50 },
+  ];
+  ws.getRow(1).eachCell((c) => styleHeader(c));
+  ws.views = [{ state: "frozen", ySplit: 1 }];
+
+  warnings.forEach((w) => {
+    ws.addRow({
+      sev: w.severity,
+      type: w.type,
+      msg: w.message,
+      ref: w.ref ? JSON.stringify(w.ref) : "",
+    });
+  });
+  ws.getColumn("msg").alignment = { wrapText: true, vertical: "top" };
+  ws.getColumn("ref").alignment = { wrapText: true, vertical: "top" };
+  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 4 } };
 }
 
 function styleHeader(cell: ExcelJS.Cell) {

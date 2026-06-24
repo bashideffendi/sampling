@@ -3,22 +3,9 @@
  * SP2DRow = baris populasi, MethodParam per metode, SampleResult = output sampling.
  */
 
-export type CanonicalField =
-  | "no_sp2d"
-  | "tgl_sp2d"
-  | "nilai_bruto"
-  | "nilai_netto"
-  | "skpd"
-  | "kode_rek"
-  | "uraian"
-  | "penyedia"
-  | "npwp"
-  | "bank"
-  | "no_spm"
-  | "kegiatan"
-  | "sub_kegiatan"
-  | "jenis_spm"
-  | "program";
+// CanonicalField v0.2 — single source di header-map.ts.
+export type { CanonicalField } from "@/lib/parser/header-map";
+import type { CanonicalField } from "@/lib/parser/header-map";
 
 export type ColumnMap = Partial<Record<CanonicalField, number>>;
 

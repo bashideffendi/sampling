@@ -14,6 +14,12 @@
  *   5. Hit point t_k = s + (k-1) × J, untuk k = 1..n_pool (sisa dari (n − top)).
  *   6. Item ke-i terpilih kalau ada t_k ∈ (cum_{i-1}, cum_i].
  *
+ * Skewness guard:
+ *   Sebelum selection, hitung CV dan max/median dari nilai positif. Kalau
+ *   distribusi extreme (CV > 2 atau max/median > 100), top stratum 100%
+ *   memang otomatis aktif lewat threshold J, tapi kita emit warning eksplisit
+ *   biar auditor sadar.
+ *
  * UML evaluation (post-audit, future v1):
  *   UML = Basic Precision + Σ Projected Misstatement + Σ Incremental Allowance
  *   Basic Precision = J × RF(c=0)
@@ -39,6 +45,48 @@ export interface MUSSampleSize {
   rf: number;
   bookValue: number;
   expectedFactor: number;
+}
+
+export interface SkewnessStats {
+  cv: number;
+  maxOverMedian: number;
+  isExtreme: boolean;
+}
+
+/**
+ * Skewness diagnostic:
+ *   - CV = stdev / mean (coefficient of variation, sample stdev)
+ *   - maxOverMedian = max / median (median=1 kalau median=0, hindari div-by-zero)
+ *   - isExtreme = CV > 2 OR maxOverMedian > 100
+ *
+ * Empty/single-element / mean<=0 → CV=0, maxOverMedian=0, isExtreme=false.
+ */
+export function computeSkewness(values: number[]): SkewnessStats {
+  if (values.length === 0) {
+    return { cv: 0, maxOverMedian: 0, isExtreme: false };
+  }
+  const n = values.length;
+  const sum = values.reduce((s, v) => s + v, 0);
+  const mean = sum / n;
+
+  let cv = 0;
+  if (n > 1 && mean > 0) {
+    const variance =
+      values.reduce((s, v) => s + (v - mean) * (v - mean), 0) / (n - 1);
+    const stdev = Math.sqrt(variance);
+    cv = stdev / mean;
+  }
+
+  const sortedAsc = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(n / 2);
+  const medianRaw =
+    n % 2 === 0 ? (sortedAsc[mid - 1] + sortedAsc[mid]) / 2 : sortedAsc[mid];
+  const medianSafe = medianRaw === 0 ? 1 : medianRaw;
+  const max = sortedAsc[n - 1];
+  const maxOverMedian = max / medianSafe;
+
+  const isExtreme = cv > 2 || maxOverMedian > 100;
+  return { cv, maxOverMedian, isExtreme };
 }
 
 export function musSampleSize(param: MUSParam): MUSSampleSize {
@@ -96,6 +144,15 @@ export function musSelection(
         `${negCount} SP2D dengan nilai negatif/nol di-skip (opt-in includeNegativeAs100Pct=false).`,
       );
     }
+  }
+
+  // Skewness guard — diagnostic atas distribusi nilai positif.
+  const positiveValues = positives.map((r) => r.nilai);
+  const skew = computeSkewness(positiveValues);
+  if (skew.isExtreme) {
+    warnings.push(
+      `SKEWNESS_EXTREME: CV=${skew.cv.toFixed(1)}, max/median=${skew.maxOverMedian.toFixed(1)}× → top stratum 100% otomatis diaktifkan`,
+    );
   }
 
   const bookValuePositive = positives.reduce((s, r) => s + r.nilai, 0);
