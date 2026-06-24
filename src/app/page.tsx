@@ -50,8 +50,8 @@ function Hero() {
   return (
     <section className="mb-20 max-w-3xl">
       <h1
-        className="serif mb-7 font-medium leading-[1.05] tracking-[-0.02em] text-[var(--color-ink)]"
-        style={{ fontSize: "clamp(2.25rem, 4.8vw + 0.5rem, 4rem)" }}
+        className="serif mb-7 whitespace-nowrap font-medium leading-[1.05] tracking-[-0.02em] text-[var(--color-ink)]"
+        style={{ fontSize: "clamp(1.875rem, 3.6vw + 0.5rem, 3.25rem)" }}
       >
         Sampling pemeriksaan BPK.
       </h1>
