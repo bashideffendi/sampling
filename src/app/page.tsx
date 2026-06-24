@@ -49,32 +49,39 @@ function Header() {
 function Hero() {
   return (
     <section className="mb-20 max-w-3xl">
-      <div className="mb-6 flex items-center gap-3 text-xs uppercase tracking-[0.22em] text-[var(--color-accent)]">
-        <span className="h-px w-8 bg-[var(--color-accent)]" />
-        Alat Pemeriksaan
-      </div>
       <h1
         className="serif mb-7 font-medium leading-[1.05] tracking-[-0.02em] text-[var(--color-ink)]"
         style={{ fontSize: "clamp(2.25rem, 4.8vw + 0.5rem, 4rem)" }}
       >
-        Sampling SP2D yang bisa{" "}
-        <span className="italic text-[var(--color-accent-ink)]">
-          dipertanggungjawabkan
-        </span>
-        .
+        Sampling pemeriksaan BPK.
       </h1>
-      <p className="max-w-2xl text-lg leading-relaxed text-[var(--color-text-muted)]">
-        Lima metode statistik untuk pemeriksaan keuangan negara —
-        Monetary Unit, Simple Random, Stratified, Judgmental, dan Attribute.
-        Formula merujuk AICPA Audit Guide. Pseudorandom seeded. Data SP2D
-        tidak pernah meninggalkan peramban.
+      <p className="mb-10 max-w-2xl text-lg leading-relaxed text-[var(--color-text-muted)]">
+        Tool sampling SP2D untuk auditor BPK RI — hasil reproducible dan
+        defensible, siap dilampirkan ke Kertas Kerja Pemeriksaan.
       </p>
-      <p className="serif mt-8 text-base italic text-[var(--color-text-subtle)]">
-        Cap, cip, cup — kembang kuncup. Mana yang nakal?
-      </p>
+      <ul className="space-y-3 text-base leading-relaxed text-[var(--color-text)]">
+        {HERO_POINTS.map((p, i) => (
+          <li key={i} className="flex gap-4">
+            <span className="mono mt-1 shrink-0 text-xs text-[var(--color-accent)]">
+              {String(i + 1).padStart(2, "0")}
+            </span>
+            <span>{p}</span>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
+
+const HERO_POINTS = [
+  "Lima metode statistik: Monetary Unit, Simple Random, Stratified, Judgmental, dan Attribute.",
+  <>
+    Formula merujuk <strong className="font-medium text-[var(--color-ink)]">AICPA</strong> (American Institute of Certified Public Accountants) Audit Guide.
+  </>,
+  "Pseudorandom seeded — sampel reproducible bit-for-bit per seed.",
+  "Data SP2D diolah di peramban, tidak pernah diunggah ke server.",
+  "Output Excel multi-sheet siap lampiran KKP + bundle JSON untuk replikasi.",
+];
 
 function ActionPair() {
   return (
