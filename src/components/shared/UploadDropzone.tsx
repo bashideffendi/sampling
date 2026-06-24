@@ -65,17 +65,20 @@ export function UploadDropzone() {
       />
       {parsing ? (
         <>
-          <Loader2 className="mb-3 h-8 w-8 animate-spin text-[var(--color-accent)]" />
-          <p className="text-sm text-[var(--color-text)]">Parsing Excel…</p>
+          <Loader2 className="mb-4 h-8 w-8 animate-spin text-[var(--color-accent)]" />
+          <p className="text-sm text-[var(--color-text)]">Membaca berkas Excel…</p>
         </>
       ) : (
         <>
-          <Upload className="mb-3 h-8 w-8 text-[var(--color-text-muted)]" />
-          <p className="text-base font-medium text-[var(--color-text)]">
-            Drop file Excel SP2D atau klik buat pilih
+          <Upload className="mb-4 h-7 w-7 text-[var(--color-accent)]" strokeWidth={1.5} />
+          <p className="serif text-xl font-medium tracking-tight text-[var(--color-ink)]">
+            Letakkan berkas Excel SP2D
           </p>
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-            Format: .xlsx / .xls / .csv — data parse di browser, gak ke server.
+            atau <span className="underline decoration-[var(--color-accent)] decoration-1 underline-offset-4">klik untuk memilih</span>
+          </p>
+          <p className="mt-5 text-xs uppercase tracking-[0.18em] text-[var(--color-text-subtle)]">
+            .xlsx · .xls · .csv  ·  diolah di peramban
           </p>
         </>
       )}

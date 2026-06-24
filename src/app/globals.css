@@ -1,20 +1,29 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #0a0a0b;
-  --color-surface: #111114;
-  --color-surface-2: #16161a;
-  --color-border: #26262d;
-  --color-border-strong: #3a3a44;
-  --color-text: #e6e6ea;
-  --color-text-muted: #8a8a95;
-  --color-text-subtle: #5a5a64;
-  --color-accent: #4ade80;
-  --color-accent-dim: #16a34a;
-  --color-warn: #fbbf24;
-  --color-danger: #f87171;
-  --color-info: #60a5fa;
+  /* Editorial Institutional palette — warm off-white + navy + gold */
+  --color-bg: #f8f5ee;
+  --color-paper: #fdfaf3;
+  --color-surface: #fdfaf3;
+  --color-surface-2: #f1ece0;
+  --color-border: #ddd2b9;
+  --color-border-strong: #b8ac90;
+  --color-hairline: #ece3cf;
 
+  --color-ink: #0e1a2c;
+  --color-text: #0e1a2c;
+  --color-text-muted: #4a5a6e;
+  --color-text-subtle: #7a8094;
+
+  --color-accent: #b8842a;
+  --color-accent-soft: #d4a85a;
+  --color-accent-ink: #6d4a13;
+
+  --color-warn: #c7741a;
+  --color-danger: #a83232;
+  --color-info: #2c4a6e;
+
+  --font-display: "Fraunces", "Cormorant Garamond", Georgia, serif;
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
 }
@@ -25,42 +34,77 @@
     color: var(--color-text);
     font-family: var(--font-sans);
     font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   body {
     background: var(--color-bg);
     color: var(--color-text);
     min-height: 100dvh;
-    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Editorial body letter-spacing relaxation */
+  body, p {
+    letter-spacing: -0.005em;
   }
 
   ::selection {
     background: var(--color-accent);
-    color: var(--color-bg);
+    color: #fdfaf3;
   }
 
-  /* tabular numerics + mono for figures */
-  .tnum {
-    font-variant-numeric: tabular-nums;
+  .serif {
+    font-family: var(--font-display);
+    font-feature-settings: "ss01", "ss02";
   }
 
   .mono {
     font-family: var(--font-mono);
   }
 
-  /* scrollbar */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Wordmark — editorial italic, slightly oversize cap-height */
+  .wordmark {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+  }
+
+  /* Editorial scrollbar — soft, paper-feel */
   *::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
   }
   *::-webkit-scrollbar-track {
     background: var(--color-bg);
   }
   *::-webkit-scrollbar-thumb {
     background: var(--color-border);
-    border-radius: 4px;
+    border-radius: 6px;
+    border: 3px solid var(--color-bg);
   }
   *::-webkit-scrollbar-thumb:hover {
     background: var(--color-border-strong);
+  }
+
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+
+  /* Editorial hairline element */
+  hr.hairline {
+    border: 0;
+    border-top: 1px solid var(--color-border);
+    margin: 1.5rem 0;
   }
 }

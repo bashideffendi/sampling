@@ -27,23 +27,23 @@ export default function ExpressPage() {
 
   return (
     <main className="mx-auto max-w-7xl px-6 py-8">
-      <header className="mb-8 flex items-center justify-between border-b border-[var(--color-border)] pb-4">
-        <div className="flex items-center gap-4">
+      <header className="mb-10 flex items-center justify-between border-b border-[var(--color-border)] pb-5">
+        <div className="flex items-center gap-5">
           <Link
             href="/"
-            className="flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+            className="flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] transition hover:text-[var(--color-ink)]"
           >
-            <ArrowLeft className="h-4 w-4" /> Home
+            <ArrowLeft className="h-4 w-4" /> Beranda
           </Link>
-          <span className="text-[var(--color-text-subtle)]">/</span>
-          <span className="mono text-lg font-semibold tracking-tight">cuplik</span>
-          <span className="mono rounded border border-[var(--color-accent)] bg-[var(--color-surface-2)] px-2 py-0.5 text-xs uppercase tracking-wider text-[var(--color-accent)]">
+          <span className="text-[var(--color-border-strong)]">/</span>
+          <span className="wordmark text-2xl text-[var(--color-ink)]">Cuplik</span>
+          <span className="rounded-full border border-[var(--color-accent)] px-3 py-0.5 text-[10px] font-medium uppercase tracking-[0.22em] text-[var(--color-accent)]">
             Express
           </span>
         </div>
-        <nav className="flex items-center gap-4 text-sm text-[var(--color-text-muted)]">
-          <Link href="/metode/mus" className="hover:text-[var(--color-text)]">Metode</Link>
-          <Link href="/tentang" className="hover:text-[var(--color-text)]">Tentang</Link>
+        <nav className="flex items-center gap-6 text-sm text-[var(--color-text-muted)]">
+          <Link href="/metode/mus" className="transition hover:text-[var(--color-ink)]">Metode</Link>
+          <Link href="/tentang" className="transition hover:text-[var(--color-ink)]">Tentang</Link>
         </nav>
       </header>
 
@@ -62,10 +62,10 @@ export default function ExpressPage() {
         </section>
       )}
 
-      <footer className="mt-16 border-t border-[var(--color-border)] pt-6 text-xs text-[var(--color-text-subtle)]">
+      <footer className="mt-20 border-t border-[var(--color-border)] pt-6 text-xs text-[var(--color-text-subtle)]">
         <div className="flex items-center justify-between">
-          <span>Data SP2D di-parse & olah di browser. Gak pernah upload server.</span>
-          <span className="mono">v0.1.0</span>
+          <span>Data SP2D diolah di peramban — tidak pernah diunggah ke server.</span>
+          <span className="mono uppercase tracking-[0.18em]">v0.1.0</span>
         </div>
       </footer>
     </main>

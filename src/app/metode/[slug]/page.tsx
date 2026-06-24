@@ -137,106 +137,114 @@ export default async function MetodeDetailPage({
   if (!m) notFound();
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-12">
-      <header className="mb-10">
+    <main className="mx-auto max-w-3xl px-8 pb-24 pt-12">
+      <header className="mb-14">
         <Link
           href="/"
-          className="mb-6 inline-flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+          className="mb-10 inline-flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] transition hover:text-[var(--color-ink)]"
         >
-          <ArrowLeft className="h-4 w-4" /> Home
+          <ArrowLeft className="h-4 w-4" /> Beranda
         </Link>
-        <div className="mb-2 mono text-xs uppercase tracking-wider text-[var(--color-accent)]">
+        <div className="mb-5 flex items-center gap-3 text-xs uppercase tracking-[0.22em] text-[var(--color-accent)]">
+          <span className="h-px w-8 bg-[var(--color-accent)]" />
           {m.code}
         </div>
-        <h1 className="mb-3 text-3xl font-semibold tracking-tight">{m.name}</h1>
-        <p className="text-base text-[var(--color-text-muted)]">{m.tagline}</p>
+        <h1 className="serif mb-6 text-5xl font-medium leading-[1.05] tracking-[-0.02em] text-[var(--color-ink)]">
+          {m.name}
+        </h1>
+        <p className="text-lg leading-relaxed text-[var(--color-text-muted)]">{m.tagline}</p>
       </header>
 
-      <section className="mb-10">
-        <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
-          Kapan dipake
-        </h2>
-        <ul className="space-y-1.5 text-sm text-[var(--color-text)]">
+      <Section title="Kapan dipakai">
+        <ul className="space-y-2 text-base leading-relaxed text-[var(--color-text)]">
           {m.kapan.map((k, i) => (
-            <li key={i} className="flex gap-2">
-              <span className="text-[var(--color-text-subtle)]">·</span>
+            <li key={i} className="flex gap-3">
+              <span className="mono text-xs text-[var(--color-accent)]">
+                {String(i + 1).padStart(2, "0")}
+              </span>
               <span>{k}</span>
             </li>
           ))}
         </ul>
-      </section>
+      </Section>
 
-      <section className="mb-10">
-        <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
-          Formula
-        </h2>
-        <pre className="mono whitespace-pre-wrap rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm text-[var(--color-text)]">
+      <Section title="Formula">
+        <pre className="mono whitespace-pre-wrap rounded-[2px] border border-[var(--color-border)] bg-[var(--color-paper)] p-6 text-sm leading-relaxed text-[var(--color-ink)]">
           {m.formula}
         </pre>
-      </section>
+      </Section>
 
-      <section className="mb-10">
-        <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
-          Parameter Input
-        </h2>
-        <div className="overflow-hidden rounded border border-[var(--color-border)]">
+      <Section title="Parameter input">
+        <div className="overflow-hidden rounded-[2px] border border-[var(--color-border)]">
           <table className="w-full text-sm">
-            <thead className="bg-[var(--color-surface)] text-left text-xs uppercase tracking-wider text-[var(--color-text-subtle)]">
+            <thead className="bg-[var(--color-surface-2)] text-left text-[10px] uppercase tracking-[0.22em] text-[var(--color-text-subtle)]">
               <tr>
-                <th className="px-3 py-2 font-normal">Param</th>
-                <th className="px-3 py-2 font-normal">Deskripsi</th>
-                <th className="px-3 py-2 font-normal">Default</th>
+                <th className="px-4 py-3 font-medium">Param</th>
+                <th className="px-4 py-3 font-medium">Deskripsi</th>
+                <th className="px-4 py-3 font-medium">Default</th>
               </tr>
             </thead>
             <tbody>
               {m.param.map((p, i) => (
-                <tr key={i} className="border-t border-[var(--color-border)]">
-                  <td className="mono px-3 py-2 text-[var(--color-text)]">{p.name}</td>
-                  <td className="px-3 py-2 text-[var(--color-text-muted)]">{p.description}</td>
-                  <td className="mono px-3 py-2 text-[var(--color-text-muted)]">{p.default}</td>
+                <tr key={i} className="border-t border-[var(--color-hairline)] bg-[var(--color-paper)]">
+                  <td className="mono px-4 py-3 text-[var(--color-ink)]">{p.name}</td>
+                  <td className="px-4 py-3 text-[var(--color-text-muted)]">{p.description}</td>
+                  <td className="mono px-4 py-3 text-[var(--color-text-muted)]">{p.default}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </section>
+      </Section>
 
-      <section className="mb-10">
-        <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
-          Output
-        </h2>
-        <ul className="space-y-1.5 text-sm text-[var(--color-text)]">
+      <Section title="Output">
+        <ul className="space-y-2 text-base leading-relaxed text-[var(--color-text)]">
           {m.output.map((o, i) => (
-            <li key={i} className="flex gap-2">
-              <span className="text-[var(--color-text-subtle)]">·</span>
+            <li key={i} className="flex gap-3">
+              <span className="mono text-xs text-[var(--color-accent)]">
+                {String(i + 1).padStart(2, "0")}
+              </span>
               <span>{o}</span>
             </li>
           ))}
         </ul>
-      </section>
+      </Section>
 
       {m.catatan && (
-        <section className="mb-10 rounded border border-[var(--color-warn)] bg-[var(--color-surface)] p-4">
-          <div className="mb-1 text-xs font-medium uppercase tracking-wider text-[var(--color-warn)]">
+        <section className="mb-12 rounded-[2px] border-l-2 border-[var(--color-accent)] bg-[var(--color-paper)] px-6 py-5">
+          <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.22em] text-[var(--color-accent)]">
             Catatan
           </div>
-          <p className="text-sm text-[var(--color-text)]">{m.catatan}</p>
+          <p className="text-base leading-relaxed text-[var(--color-text)]">{m.catatan}</p>
         </section>
       )}
 
-      <section className="mb-10 border-t border-[var(--color-border)] pt-6">
-        <h2 className="mb-2 text-xs uppercase tracking-wider text-[var(--color-text-subtle)]">
-          Sumber Formula
-        </h2>
-        <p className="text-xs text-[var(--color-text-muted)]">{m.sumber}</p>
+      <section className="mb-14 border-t border-[var(--color-border)] pt-6">
+        <div className="mb-2 text-[10px] uppercase tracking-[0.22em] text-[var(--color-text-subtle)]">
+          Sumber formula
+        </div>
+        <p className="serif text-base italic leading-relaxed text-[var(--color-text-muted)]">
+          {m.sumber}
+        </p>
       </section>
 
       <Link
         href="/express/new"
-        className="inline-flex items-center gap-2 rounded border border-[var(--color-accent)] bg-[var(--color-surface-2)] px-4 py-2 text-sm font-medium text-[var(--color-accent)] transition hover:bg-[var(--color-bg)]"
+        className="inline-flex items-center gap-2 rounded-full border border-[var(--color-accent)] bg-[var(--color-accent)] px-6 py-3 text-sm font-medium text-[var(--color-paper)] transition hover:bg-[var(--color-accent-ink)] hover:border-[var(--color-accent-ink)]"
       >
         Coba metode ini →
       </Link>
     </main>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="mb-12">
+      <h2 className="serif mb-5 text-2xl font-medium tracking-[-0.015em] text-[var(--color-ink)]">
+        {title}
+      </h2>
+      {children}
+    </section>
   );
 }
