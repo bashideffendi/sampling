@@ -56,7 +56,7 @@ describe("mulberry32 PRNG", () => {
   });
 
   it("seedFromString deterministic", () => {
-    expect(seedFromString("cuplik")).toBe(seedFromString("cuplik"));
-    expect(seedFromString("cuplik")).not.toBe(seedFromString("cuplek"));
+    expect(seedFromString("capcipcup")).toBe(seedFromString("capcipcup"));
+    expect(seedFromString("capcipcup")).not.toBe(seedFromString("capcipcap"));
   });
 });

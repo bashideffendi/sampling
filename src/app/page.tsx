@@ -23,7 +23,7 @@ function Header() {
   return (
     <header className="mb-20 flex flex-wrap items-baseline justify-between gap-y-4">
       <div className="flex items-baseline gap-3">
-        <span className="wordmark text-3xl text-[var(--color-ink)]">Cuplik</span>
+        <span className="wordmark text-3xl text-[var(--color-ink)]">Cap Cip Cup</span>
         <span className="mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-text-subtle)]">
           v0.1.0
         </span>
@@ -68,6 +68,9 @@ function Hero() {
         Monetary Unit, Simple Random, Stratified, Judgmental, dan Attribute.
         Formula merujuk AICPA Audit Guide. Pseudorandom seeded. Data SP2D
         tidak pernah meninggalkan peramban.
+      </p>
+      <p className="serif mt-8 text-base italic text-[var(--color-text-subtle)]">
+        Cap, cip, cup — kembang kuncup. Mana yang nakal?
       </p>
     </section>
   );
@@ -241,11 +244,11 @@ function Footer() {
     <footer className="border-t border-[var(--color-border)] pt-7">
       <div className="flex flex-wrap items-baseline justify-between gap-3 text-xs text-[var(--color-text-subtle)]">
         <div className="flex items-baseline gap-3">
-          <span className="wordmark text-base text-[var(--color-ink)]">Cuplik</span>
+          <span className="wordmark text-base text-[var(--color-ink)]">Cap Cip Cup</span>
           <span>· alat pemeriksaan independen · 2026</span>
         </div>
         <div className="flex items-center gap-5">
-          <span className="mono uppercase tracking-[0.22em]">cuplik.masbash.id</span>
+          <span className="mono uppercase tracking-[0.22em]">capcipcup.masbash.id</span>
           <Link href="/tentang" className="hover:text-[var(--color-ink)]">
             Tentang
           </Link>

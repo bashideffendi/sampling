@@ -1,5 +1,5 @@
 /**
- * Canonical types untuk Cuplik.
+ * Canonical types untuk Cap Cip Cup.
  * SP2DRow = baris populasi, MethodParam per metode, SampleResult = output sampling.
  */
 

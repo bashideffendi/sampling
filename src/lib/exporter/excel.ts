@@ -31,7 +31,7 @@ export async function exportToExcel(
   opts: ExportOptions = {},
 ): Promise<Blob> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Cuplik";
+  wb.creator = "Cap Cip Cup";
   wb.created = new Date(result.computedAt);
   wb.modified = new Date(result.computedAt);
 
@@ -161,7 +161,7 @@ function buildAuditTrail(
   ];
   ws.getRow(1).eachCell((c) => styleHeader(c));
   const entries: Array<[string, string | number]> = [
-    ["App", "Cuplik"],
+    ["App", "Cap Cip Cup"],
     ["App Version", opts.appVersion ?? "0.1.0"],
     ["Draft ID", opts.draftId ?? "—"],
     ["Computed At", result.computedAt],
@@ -239,5 +239,5 @@ export function makeFilename(
     .slice(0, 30);
   const method = result.method.toUpperCase();
   const ts = result.computedAt.replace(/[:T-]/g, "").slice(0, 13); // YYYYMMDDHHmm
-  return `Cuplik_Sampel_SP2D_${entitas}_TA${tahun}_${method}_${ts}.${ext}`;
+  return `Capcipcup_Sampel_SP2D_${entitas}_TA${tahun}_${method}_${ts}.${ext}`;
 }

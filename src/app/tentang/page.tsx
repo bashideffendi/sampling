@@ -17,7 +17,7 @@ export default function TentangPage() {
           Catatan
         </div>
         <h1 className="serif mb-6 text-5xl font-medium leading-[1.05] tracking-[-0.02em] text-[var(--color-ink)]">
-          Tentang Cuplik
+          Tentang Cap Cip Cup
         </h1>
         <p className="text-lg leading-relaxed text-[var(--color-text-muted)]">
           Alat sampling pemeriksaan SP2D untuk auditor BPK RI — utilitas
@@ -81,7 +81,7 @@ export default function TentangPage() {
 
       <footer className="border-t border-[var(--color-border)] pt-7 text-xs text-[var(--color-text-subtle)]">
         <p className="serif italic">
-          Cuplik · <span className="mono not-italic">v0.1.0</span> · Bashid Effendi · MIT
+          Cap Cip Cup · <span className="mono not-italic">v0.1.0</span> · Bashid Effendi · MIT
         </p>
         <p className="mt-2">
           Bukan produk resmi BPK. Independen, sumber terbuka, dimaksudkan

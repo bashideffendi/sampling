@@ -36,7 +36,7 @@ export default function ExpressPage() {
             <ArrowLeft className="h-4 w-4" /> Beranda
           </Link>
           <span className="text-[var(--color-border-strong)]">/</span>
-          <span className="wordmark text-2xl text-[var(--color-ink)]">Cuplik</span>
+          <span className="wordmark text-2xl text-[var(--color-ink)]">Cap Cip Cup</span>
           <span className="rounded-full border border-[var(--color-accent)] px-3 py-0.5 text-[10px] font-medium uppercase tracking-[0.22em] text-[var(--color-accent)]">
             Express
           </span>

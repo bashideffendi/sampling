@@ -119,8 +119,8 @@ const initialDraftMeta = (): DraftMeta => ({
   createdAt: new Date().toISOString(),
 });
 
-const POPULASI_KEY = (id: string) => `cuplik:populasi:${id}`;
-const META_KEY = (id: string) => `cuplik:populasi-meta:${id}`;
+const POPULASI_KEY = (id: string) => `capcipcup:populasi:${id}`;
+const META_KEY = (id: string) => `capcipcup:populasi-meta:${id}`;
 
 export const useSamplingStore = create<SamplingStore>()(
   persist(
@@ -186,7 +186,7 @@ export const useSamplingStore = create<SamplingStore>()(
       setResult: (r) => set({ result: r }),
     }),
     {
-      name: "cuplik-sampling",
+      name: "capcipcup-sampling",
       version: 1,
       storage: createJSONStorage(() => localStorage),
       // Only persist params + meta, not populasi (yang besar, di IndexedDB).

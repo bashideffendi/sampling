@@ -23,10 +23,10 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "Cuplik — Sampling SP2D yang bisa dipertanggungjawabkan",
+  title: "Cap Cip Cup — Sampling SP2D yang bisa dipertanggungjawabkan",
   description:
     "Tool sampling pemeriksaan SP2D untuk auditor BPK RI. MUS, Simple Random, Stratified, Judgmental, Attribute. Reproducible & defensible.",
-  applicationName: "Cuplik",
+  applicationName: "Cap Cip Cup",
   authors: [{ name: "Bashid Effendi" }],
 };
 
