@@ -35,6 +35,9 @@ function Header() {
         <Link href="/risk-helper" className="transition hover:text-[var(--color-ink)]">
           Risk Helper
         </Link>
+        <Link href="/cluster-explorer" className="transition hover:text-[var(--color-ink)]">
+          Cluster
+        </Link>
         <Link href="/tentang" className="transition hover:text-[var(--color-ink)]">
           Tentang
         </Link>
