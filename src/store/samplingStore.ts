@@ -174,15 +174,22 @@ export const useSamplingStore = create<SamplingStore>()(
         } else {
           await idbDel(EXTRAS_KEY(id));
         }
+        // Guard: cuma overwrite bookValue/populationSize kalau user belum
+        // pernah edit (masih sama dengan default 0). Audit recommendation —
+        // sebelumnya overwrite tanpa syarat = ngilangin custom user value.
+        const cur = get().params;
         set({
           populasi: rows,
           populasiMeta: meta,
           parseExtras: extras ?? null,
           params: {
-            ...get().params,
-            mus: { ...get().params.mus, bookValue: meta.totalNilai },
-            srs: { ...get().params.srs, populationSize: meta.count },
-            attribute: { ...get().params.attribute, populationSize: meta.count },
+            ...cur,
+            mus: { ...cur.mus, bookValue: cur.mus.bookValue === 0 ? meta.totalNilai : cur.mus.bookValue },
+            srs: { ...cur.srs, populationSize: cur.srs.populationSize === 0 ? meta.count : cur.srs.populationSize },
+            attribute: {
+              ...cur.attribute,
+              populationSize: cur.attribute.populationSize === 0 ? meta.count : cur.attribute.populationSize,
+            },
           },
         });
       },

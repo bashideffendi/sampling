@@ -4,6 +4,17 @@
  * Tujuan: bukti reproducibility. Hash sama -> populasi identik (urutan upload
  * tak relevan). Dipakai di SeedBundle.populasi.hashSha256 + verifikasi replay.
  *
+ * SCOPE HASH (penting buat audit trail clarity):
+ *   - Cuma cover populasi SAMPLING UTAMA (rows yang lolos ke sampling engine).
+ *   - TIDAK cover populasi koreksi (PFK/RETUR/negatif yang di-route ke
+ *     populasi_koreksi terpisah) — auditor yang mau verify dua-duanya harus
+ *     hash populasiKoreksi sendiri kalau perlu.
+ *   - Cuma include field identifier (no_sp2d|tgl|nilai|skpd) — penyedia,
+ *     npwp, keterangan, jenis_trx TIDAK ikut. Perubahan field2 itu di file
+ *     yang sama TIDAK ngubah hash. Trade-off: hash robust ke trivial diff
+ *     (typo penyedia), tapi miss perubahan field non-identifier yang
+ *     auditor mungkin peduli.
+ *
  * Canonical string:
  *   sort baris by no_sp2d_normalized (fallback no_sp2d) lex ascending,
  *   tiap baris: "no|tgl|nilai|skpd",

@@ -128,13 +128,29 @@ export function ColumnMapper({
 
   function handleFieldChange(field: CanonicalField, value: string) {
     const next: ResolvedColumnMapping = { ...currentMapping };
-    const idx = headers.indexOf(value);
-    if (!value || idx < 0) {
+    if (value === "") {
       delete next[field];
     } else {
-      next[field] = idx;
+      const idx = parseInt(value, 10);
+      if (!Number.isNaN(idx) && idx >= 0 && idx < headers.length) {
+        next[field] = idx;
+      } else {
+        delete next[field];
+      }
     }
     onChange(next);
+  }
+
+  function columnLabel(i: number): string {
+    // Excel-style column ref (A, B, C, ..., AA, AB, ...) buat disambiguasi
+    // kolom-kolom yang header text-nya sama.
+    let code = "";
+    let n = i;
+    do {
+      code = String.fromCharCode(65 + (n % 26)) + code;
+      n = Math.floor(n / 26) - 1;
+    } while (n >= 0);
+    return code;
   }
 
   return (
@@ -232,14 +248,14 @@ export function ColumnMapper({
                   </div>
                   <div className="md:w-1/2">
                     <select
-                      value={header ?? ""}
+                      value={currentMapping[field] !== undefined ? String(currentMapping[field]) : ""}
                       onChange={(e) => handleFieldChange(field, e.target.value)}
                       className="w-full rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm text-[var(--color-text)] focus:border-[var(--color-accent)] focus:outline-none"
                     >
                       <option value="">— tidak dipetakan —</option>
-                      {headers.map((h) => (
-                        <option key={h} value={h}>
-                          {h}
+                      {headers.map((h, i) => (
+                        <option key={i} value={String(i)}>
+                          Kol {columnLabel(i)} · {h || "(kosong)"}
                         </option>
                       ))}
                     </select>

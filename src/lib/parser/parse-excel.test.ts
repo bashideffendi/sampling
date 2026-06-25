@@ -28,10 +28,10 @@ describe("parseRupiah", () => {
     expect(parseRupiah("(500.000)")).toBe(-500000);
   });
 
-  it("invalid → undefined", () => {
-    expect(parseRupiah("abc")).toBeUndefined();
-    expect(parseRupiah(null)).toBeUndefined();
-    expect(parseRupiah("")).toBeUndefined();
+  it("invalid → null", () => {
+    expect(parseRupiah("abc")).toBeNull();
+    expect(parseRupiah(null)).toBeNull();
+    expect(parseRupiah("")).toBeNull();
   });
 });
 
