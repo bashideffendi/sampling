@@ -15,6 +15,8 @@ import { toast } from "sonner";
 import type { MethodParam } from "@/types";
 import { APP_VERSION } from "@/lib/constants";
 import { SkewnessAlert } from "@/components/sampling/SkewnessAlert";
+import { MisstatementInput } from "@/components/sampling/MisstatementInput";
+import type { ConfidenceLevel } from "@/types";
 
 export function ResultPanel() {
   const populasi = useSamplingStore((s) => s.populasi);
@@ -165,6 +167,13 @@ export function ResultPanel() {
           </div>
 
           <SamplePreview result={result} />
+
+          {result.method === "mus" && (
+            <MisstatementInput
+              result={result}
+              confidence={params.mus.confidenceLevel as ConfidenceLevel}
+            />
+          )}
         </div>
       )}
     </div>
