@@ -1,0 +1,196 @@
+import { describe, expect, it } from "vitest";
+import type { SP2DRow } from "@/types";
+import {
+  akunHonorDominant,
+  akunRawanBansos,
+  akunRawanHibah,
+  akunRawanModal,
+  AKUN_RULES,
+} from "./akun";
+
+function row(partial: Partial<SP2DRow> & { _idx: number }): SP2DRow {
+  return {
+    no_sp2d: `SP2D/${partial._idx}`,
+    tgl_sp2d: "2025-01-01",
+    nilai: 0,
+    ...partial,
+  };
+}
+
+describe("AKUN_RULES manifest", () => {
+  it("export 4 rules dengan id unik & kategori akun", () => {
+    expect(AKUN_RULES).toHaveLength(4);
+    const ids = AKUN_RULES.map((r) => r.id);
+    expect(new Set(ids).size).toBe(4);
+    for (const r of AKUN_RULES) {
+      expect(r.category).toBe("akun");
+      expect(r.defaultOn).toBe(true);
+    }
+  });
+});
+
+describe("akun_rawan_bansos", () => {
+  it("flag SP2D bansos 5.7.xx > Rp 100jt", () => {
+    const r = row({
+      _idx: 1,
+      kode_rek: "5.7.01.01.0001",
+      nilai: 150_000_000,
+    });
+    expect(akunRawanBansos.filter(r, [r])).toBe(true);
+  });
+
+  it("TIDAK flag bansos tepat Rp 100jt (threshold strict >)", () => {
+    const r = row({
+      _idx: 2,
+      kode_rek: "57010100001",
+      nilai: 100_000_000,
+    });
+    expect(akunRawanBansos.filter(r, [r])).toBe(false);
+  });
+
+  it("TIDAK flag akun non-bansos meskipun besar (kode 5.2.xx modal)", () => {
+    const r = row({
+      _idx: 3,
+      kode_rek: "5.2.01.01",
+      nilai: 999_000_000,
+    });
+    expect(akunRawanBansos.filter(r, [r])).toBe(false);
+  });
+});
+
+describe("akun_rawan_hibah", () => {
+  it("flag SP2D hibah 5.6.xx > Rp 100jt", () => {
+    const r = row({
+      _idx: 1,
+      kode_rek: "5.6.01.01.0001",
+      nilai: 250_000_000,
+    });
+    expect(akunRawanHibah.filter(r, [r])).toBe(true);
+  });
+
+  it("TIDAK flag hibah Rp 80jt (under threshold)", () => {
+    const r = row({ _idx: 2, kode_rek: "5.6.01", nilai: 80_000_000 });
+    expect(akunRawanHibah.filter(r, [r])).toBe(false);
+  });
+});
+
+describe("akun_rawan_modal", () => {
+  it("flag belanja modal 5.3.xx > Rp 500jt", () => {
+    const r = row({
+      _idx: 1,
+      kode_rek: "5.3.02.01.0001",
+      nilai: 750_000_000,
+    });
+    expect(akunRawanModal.filter(r, [r])).toBe(true);
+  });
+
+  it("flag juga prefix 5.2.xx (BAS lama) > Rp 500jt", () => {
+    const r = row({
+      _idx: 2,
+      kode_rek: "5.2.03.01",
+      nilai: 600_000_000,
+    });
+    expect(akunRawanModal.filter(r, [r])).toBe(true);
+  });
+
+  it("TIDAK flag modal Rp 400jt", () => {
+    const r = row({
+      _idx: 3,
+      kode_rek: "5.3.01",
+      nilai: 400_000_000,
+    });
+    expect(akunRawanModal.filter(r, [r])).toBe(false);
+  });
+});
+
+describe("akun_honor_dominant", () => {
+  it("flag agregat honor satu vendor+OPD > Rp 50jt walau per-row kecil", () => {
+    const a = row({
+      _idx: 1,
+      kode_rek: "5.1.02.01.0001",
+      penyedia: "Budi Santoso",
+      skpd: "Dinas Pendidikan",
+      nilai: 20_000_000,
+    });
+    const b = row({
+      _idx: 2,
+      kode_rek: "5.1.02.01.0001",
+      penyedia: "Budi Santoso",
+      skpd: "Dinas Pendidikan",
+      nilai: 20_000_000,
+    });
+    const c = row({
+      _idx: 3,
+      kode_rek: "5.1.02.01.0001",
+      penyedia: "Budi Santoso",
+      skpd: "Dinas Pendidikan",
+      nilai: 15_000_000,
+    });
+    const pop = [a, b, c];
+    // total 55jt > 50jt → semua row Budi @ Disdik kena flag
+    expect(akunHonorDominant.filter(a, pop)).toBe(true);
+    expect(akunHonorDominant.filter(b, pop)).toBe(true);
+    expect(akunHonorDominant.filter(c, pop)).toBe(true);
+  });
+
+  it("TIDAK flag kalau total honor satu vendor+OPD <= Rp 50jt", () => {
+    const a = row({
+      _idx: 1,
+      kode_rek: "5.1.02.01",
+      penyedia: "Siti A",
+      skpd: "Dinkes",
+      nilai: 20_000_000,
+    });
+    const b = row({
+      _idx: 2,
+      kode_rek: "5.1.02.01",
+      penyedia: "Siti A",
+      skpd: "Dinkes",
+      nilai: 20_000_000,
+    });
+    // total 40jt
+    expect(akunHonorDominant.filter(a, [a, b])).toBe(false);
+  });
+
+  it("vendor sama beda OPD: agregasi TERPISAH (tidak digabung)", () => {
+    const a = row({
+      _idx: 1,
+      kode_rek: "5.1.02.01",
+      penyedia: "Andi",
+      skpd: "Dinas A",
+      nilai: 30_000_000,
+    });
+    const b = row({
+      _idx: 2,
+      kode_rek: "5.1.02.01",
+      penyedia: "Andi",
+      skpd: "Dinas B",
+      nilai: 30_000_000,
+    });
+    // total per (vendor+OPD) cuma 30jt masing-masing, di bawah threshold
+    expect(akunHonorDominant.filter(a, [a, b])).toBe(false);
+    expect(akunHonorDominant.filter(b, [a, b])).toBe(false);
+  });
+
+  it("TIDAK flag row non-honor walau besar (kode 5.1.01 gaji bukan honor)", () => {
+    const r = row({
+      _idx: 1,
+      kode_rek: "5.1.01.01.0001",
+      penyedia: "PNS X",
+      skpd: "Dinas A",
+      nilai: 100_000_000,
+    });
+    expect(akunHonorDominant.filter(r, [r])).toBe(false);
+  });
+
+  it("abaikan row tanpa vendor atau OPD (agregasi tidak bermakna)", () => {
+    const r = row({
+      _idx: 1,
+      kode_rek: "5.1.02.01",
+      penyedia: "",
+      skpd: "Dinas A",
+      nilai: 999_000_000,
+    });
+    expect(akunHonorDominant.filter(r, [r])).toBe(false);
+  });
+});

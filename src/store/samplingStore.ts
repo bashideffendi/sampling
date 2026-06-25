@@ -21,6 +21,7 @@ import type {
   ResolvedColumnMapping,
 } from "@/lib/parser/canonical-row";
 import type { FingerprintResult } from "@/lib/parser/canonical-row";
+import type { RiskReport } from "@/lib/risk";
 import { uid } from "@/lib/utils";
 
 export interface ParseExtras {
@@ -128,6 +129,10 @@ interface SamplingStore {
 
   result: SamplingResult | null;
   setResult: (r: SamplingResult | null) => void;
+
+  /** Risk Helper report — in-memory only, tidak di-persist (besar). */
+  riskReport: RiskReport | null;
+  setRiskReport: (r: RiskReport | null) => void;
 }
 
 const initialDraftMeta = (): DraftMeta => ({
@@ -158,6 +163,7 @@ export const useSamplingStore = create<SamplingStore>()(
           populasiMeta: null,
           parseExtras: null,
           result: null,
+          riskReport: null,
           params: DEFAULT_PARAMS,
         });
       },
@@ -182,6 +188,8 @@ export const useSamplingStore = create<SamplingStore>()(
           populasi: rows,
           populasiMeta: meta,
           parseExtras: extras ?? null,
+          // Populasi baru = invalidate risk report (hash beda).
+          riskReport: null,
           params: {
             ...cur,
             mus: { ...cur.mus, bookValue: cur.mus.bookValue === 0 ? meta.totalNilai : cur.mus.bookValue },
@@ -207,7 +215,13 @@ export const useSamplingStore = create<SamplingStore>()(
         await idbDel(POPULASI_KEY(id));
         await idbDel(META_KEY(id));
         await idbDel(EXTRAS_KEY(id));
-        set({ populasi: null, populasiMeta: null, parseExtras: null, result: null });
+        set({
+          populasi: null,
+          populasiMeta: null,
+          parseExtras: null,
+          result: null,
+          riskReport: null,
+        });
       },
 
       method: "mus",
@@ -221,12 +235,17 @@ export const useSamplingStore = create<SamplingStore>()(
 
       result: null,
       setResult: (r) => set({ result: r }),
+
+      riskReport: null,
+      setRiskReport: (r) => set({ riskReport: r }),
     }),
     {
       name: "capcipcup-sampling",
       version: 2,
       storage: createJSONStorage(() => localStorage),
-      // Only persist params + meta, not populasi (yang besar, di IndexedDB).
+      // Only persist params + meta, not populasi (yang besar, di IndexedDB)
+      // dan TIDAK persist riskReport (Map gak serialize natural via JSON +
+      // ukurannya bisa MB-an).
       partialize: (s) => ({
         draftId: s.draftId,
         draftMeta: s.draftMeta,

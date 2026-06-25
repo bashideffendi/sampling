@@ -32,6 +32,9 @@ function Header() {
         <Link href="/metode/mus" className="transition hover:text-[var(--color-ink)]">
           Metode
         </Link>
+        <Link href="/risk-helper" className="transition hover:text-[var(--color-ink)]">
+          Risk Helper
+        </Link>
         <Link href="/tentang" className="transition hover:text-[var(--color-ink)]">
           Tentang
         </Link>
@@ -81,6 +84,7 @@ const HERO_POINTS = [
   "Pseudorandom seeded — sampel reproducible bit-for-bit per seed.",
   "Data SP2D diolah di peramban, tidak pernah diunggah ke server.",
   "Output Excel multi-sheet siap lampiran KKP + bundle JSON untuk replikasi.",
+  "Risk Helper: 40 aturan deteksi anomali populasi sebagai input judgmental sampling.",
 ];
 
 function ActionPair() {

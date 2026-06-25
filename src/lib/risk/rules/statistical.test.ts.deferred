@@ -1,0 +1,390 @@
+import { describe, it, expect } from "vitest";
+import type { SP2DRow } from "@/types";
+import { buildRuleContext } from "../types";
+import {
+  BENFORD_CHI_CRITICAL_05,
+  BENFORD_EXPECTED,
+  STATISTICAL_RULES,
+  benfordChiSquare,
+  firstDigit,
+  giniCoefficient,
+  iqrSummary,
+  isAkunBenfordExcluded,
+  isRoundMillion,
+  median,
+  quantileSorted,
+} from "./statistical";
+
+function row(partial: Partial<SP2DRow> & { _idx?: number }): SP2DRow {
+  return {
+    no_sp2d: partial.no_sp2d ?? `SP2D-${partial._idx ?? 0}`,
+    tgl_sp2d: partial.tgl_sp2d ?? "2025-01-15",
+    nilai: partial.nilai ?? 0,
+    skpd: partial.skpd,
+    kode_rek: partial.kode_rek,
+    uraian: partial.uraian,
+    penyedia: partial.penyedia,
+    npwp: partial.npwp,
+    _idx: partial._idx ?? 0,
+  };
+}
+
+function findRule(id: string) {
+  const rule = STATISTICAL_RULES.find((r) => r.id === id);
+  if (!rule) throw new Error(`rule ${id} tidak terdaftar`);
+  return rule;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe("firstDigit", () => {
+  it("ambil digit signifikan pertama buat angka positif & negatif", () => {
+    expect(firstDigit(12345)).toBe(1);
+    expect(firstDigit(987.65)).toBe(9);
+    expect(firstDigit(-2500)).toBe(2);
+    expect(firstDigit(7)).toBe(7);
+  });
+
+  it("return 0 buat nilai invalid / nol", () => {
+    expect(firstDigit(0)).toBe(0);
+    expect(firstDigit(0.4)).toBe(0); // floor -> 0
+    expect(firstDigit(NaN)).toBe(0);
+    expect(firstDigit(Number.POSITIVE_INFINITY)).toBe(0);
+  });
+});
+
+describe("benfordChiSquare", () => {
+  it("chi-square mendekati 0 saat distribusi pas Benford ideal", () => {
+    // Generate 9000 nilai: 3010 dengan first digit 1, 1761 dengan 2, dst.
+    const values: number[] = [];
+    const N = 9000;
+    for (let d = 1; d <= 9; d++) {
+      const expectedCount = Math.round(BENFORD_EXPECTED[d] * N);
+      for (let i = 0; i < expectedCount; i++) {
+        // bikin nilai random yang first digit-nya `d`
+        const magnitude = d * 1000 + (i % 999);
+        values.push(magnitude);
+      }
+    }
+    const result = benfordChiSquare(values);
+    expect(result.total).toBeGreaterThan(8000);
+    expect(result.chi).toBeLessThan(BENFORD_CHI_CRITICAL_05);
+  });
+
+  it("chi-square tinggi saat distribusi uniform (jauh dari Benford)", () => {
+    // Tiap digit 1..9 muncul 1000 kali — uniform, bukan Benford.
+    const values: number[] = [];
+    for (let d = 1; d <= 9; d++) {
+      for (let i = 0; i < 1000; i++) {
+        values.push(d * 1000 + i);
+      }
+    }
+    const result = benfordChiSquare(values);
+    expect(result.total).toBe(9000);
+    expect(result.chi).toBeGreaterThan(BENFORD_CHI_CRITICAL_05);
+  });
+
+  it("abaikan nilai dengan first digit 0 / invalid", () => {
+    const result = benfordChiSquare([0, -0, NaN, 12345]);
+    expect(result.total).toBe(1);
+    expect(result.counts[1]).toBe(1);
+  });
+});
+
+describe("isAkunBenfordExcluded", () => {
+  it("exclude akun pegawai/honor/perjadin/hibah/bansos", () => {
+    expect(isAkunBenfordExcluded("5101")).toBe(true); // pegawai
+    expect(isAkunBenfordExcluded("5104")).toBe(true); // honor
+    expect(isAkunBenfordExcluded("5125")).toBe(true); // perjadin
+    expect(isAkunBenfordExcluded("5601")).toBe(true); // hibah
+    expect(isAkunBenfordExcluded("5702")).toBe(true); // bansos
+  });
+
+  it("izinkan akun barang/jasa", () => {
+    expect(isAkunBenfordExcluded("5202")).toBe(false);
+    expect(isAkunBenfordExcluded("5232")).toBe(false);
+    expect(isAkunBenfordExcluded("__UNKNOWN__")).toBe(false);
+  });
+});
+
+describe("median + quantileSorted", () => {
+  it("hitung median benar buat even & odd length", () => {
+    expect(median([1, 3, 5])).toBe(3);
+    expect(median([1, 2, 3, 4])).toBe(2.5);
+    expect(median([])).toBe(0);
+  });
+
+  it("quantile linear interpolation", () => {
+    const sorted = [10, 20, 30, 40, 50];
+    expect(quantileSorted(sorted, 0)).toBe(10);
+    expect(quantileSorted(sorted, 0.5)).toBe(30);
+    expect(quantileSorted(sorted, 1)).toBe(50);
+  });
+});
+
+describe("iqrSummary", () => {
+  it("hitung Q1, Q3, fences buat distribusi simetris", () => {
+    const stats = iqrSummary([10, 20, 30, 40, 50, 60, 70, 80, 90]);
+    expect(stats.q1).toBeCloseTo(30, 5);
+    expect(stats.q3).toBeCloseTo(70, 5);
+    expect(stats.iqr).toBeCloseTo(40, 5);
+    expect(stats.upperFence).toBeCloseTo(130, 5);
+  });
+
+  it("empty array → semua 0", () => {
+    const stats = iqrSummary([]);
+    expect(stats.iqr).toBe(0);
+    expect(stats.upperFence).toBe(0);
+  });
+});
+
+describe("giniCoefficient", () => {
+  it("perfect equality → mendekati 0", () => {
+    const g = giniCoefficient([100, 100, 100, 100, 100]);
+    expect(g).toBeCloseTo(0, 3);
+  });
+
+  it("konsentrasi ekstrem → mendekati 1", () => {
+    const g = giniCoefficient([0, 0, 0, 0, 1000]);
+    expect(g).toBeGreaterThan(0.7);
+  });
+});
+
+describe("isRoundMillion", () => {
+  it("true buat kelipatan 1 juta positif", () => {
+    expect(isRoundMillion(1_000_000)).toBe(true);
+    expect(isRoundMillion(50_000_000)).toBe(true);
+  });
+  it("false buat non-kelipatan / nol / negatif", () => {
+    expect(isRoundMillion(1_500_000)).toBe(false);
+    expect(isRoundMillion(0)).toBe(false);
+    expect(isRoundMillion(-1_000_000)).toBe(false);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Rule: statistical_benford_global
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe("statistical_benford_global rule", () => {
+  const rule = findRule("statistical_benford_global");
+
+  it("defaultOff, severity low, butuh n>=1000", () => {
+    expect(rule.defaultOn).toBe(false);
+    expect(rule.severity).toBe("low");
+    expect(rule.requires?.minRows).toBe(1000);
+  });
+
+  it("skip saat populasi < 1000", () => {
+    const rows = Array.from({ length: 100 }, (_, i) =>
+      row({ _idx: i, nilai: 1000 + i, kode_rek: "5202" }),
+    );
+    const hit = rule.evaluate(buildRuleContext(rows));
+    expect(hit.flagged).toEqual([]);
+    expect((hit.summary as { skipped?: boolean }).skipped).toBe(true);
+  });
+
+  it("detect deviasi saat distribusi uniform (chi-square > critical)", () => {
+    const rows: SP2DRow[] = [];
+    for (let d = 1; d <= 9; d++) {
+      for (let i = 0; i < 150; i++) {
+        rows.push(row({ _idx: rows.length, nilai: d * 1000 + i, kode_rek: "5202" }));
+      }
+    }
+    const hit = rule.evaluate(buildRuleContext(rows));
+    expect((hit.summary as { deviates: boolean }).deviates).toBe(true);
+  });
+
+  it("exclude akun pegawai dari sample size", () => {
+    // 1000 baris di akun 5101 (pegawai, di-exclude) + 0 baris di akun lain.
+    const rows = Array.from({ length: 1000 }, (_, i) =>
+      row({ _idx: i, nilai: 5_000_000, kode_rek: "5101" }),
+    );
+    const hit = rule.evaluate(buildRuleContext(rows));
+    const summary = hit.summary as { total: number; excludedRows: number };
+    expect(summary.excludedRows).toBe(1000);
+    expect(summary.total).toBe(0);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Rule: statistical_benford_per_akun
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe("statistical_benford_per_akun rule", () => {
+  const rule = findRule("statistical_benford_per_akun");
+
+  it("flag akun dengan distribusi uniform, skip akun excluded", () => {
+    const rows: SP2DRow[] = [];
+    // Akun 5202 — uniform tiap digit 1..9 muncul 60 kali → 540 rows, chi-square tinggi.
+    for (let d = 1; d <= 9; d++) {
+      for (let i = 0; i < 60; i++) {
+        rows.push(
+          row({ _idx: rows.length, nilai: d * 1000 + i, kode_rek: "5202" }),
+        );
+      }
+    }
+    // Akun 5101 (pegawai, excluded) — 600 rows seragam Rp 5.000.000.
+    for (let i = 0; i < 600; i++) {
+      rows.push(row({ _idx: rows.length, nilai: 5_000_000, kode_rek: "5101" }));
+    }
+    const hit = rule.evaluate(buildRuleContext(rows));
+    const akunResults = (hit.summary as { akunResults: Array<{ akun: string }> }).akunResults;
+    const flaggedAkuns = akunResults.map((a) => a.akun);
+    expect(flaggedAkuns).toContain("5202");
+    expect(flaggedAkuns).not.toContain("5101");
+    // Semua row akun 5202 ke-flag karena akun deviates.
+    expect(hit.flagged.length).toBe(540);
+  });
+
+  it("skip akun dengan n<500", () => {
+    const rows = Array.from({ length: 400 }, (_, i) =>
+      row({ _idx: i, nilai: i + 1, kode_rek: "5202" }),
+    );
+    const hit = rule.evaluate(buildRuleContext(rows));
+    const akunResults = (hit.summary as { akunResults: unknown[] }).akunResults;
+    expect(akunResults).toEqual([]);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Rule: statistical_iqr_outlier
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe("statistical_iqr_outlier rule", () => {
+  const rule = findRule("statistical_iqr_outlier");
+
+  it("flag outlier ekstrem di atas pagar Tukey", () => {
+    const rows: SP2DRow[] = [];
+    for (let i = 1; i <= 20; i++) {
+      rows.push(row({ _idx: i, nilai: i * 1_000_000, kode_rek: "5202" }));
+    }
+    // Outlier ekstrem.
+    rows.push(row({ _idx: 999, nilai: 500_000_000, kode_rek: "5202", no_sp2d: "OUTLIER" }));
+    const hit = rule.evaluate(buildRuleContext(rows));
+    const ids = hit.flagged.map((r) => r.no_sp2d);
+    expect(ids).toContain("OUTLIER");
+    // Jangan flag transaksi normal di tengah distribusi.
+    expect(ids).not.toContain("SP2D-10");
+  });
+
+  it("skip akun dengan <10 transaksi", () => {
+    const rows = Array.from({ length: 5 }, (_, i) =>
+      row({ _idx: i, nilai: 1_000_000 * (i + 1), kode_rek: "5202" }),
+    );
+    const hit = rule.evaluate(buildRuleContext(rows));
+    expect(hit.flagged).toEqual([]);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Rule: statistical_concentration_vendor_opd
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe("statistical_concentration_vendor_opd rule", () => {
+  const rule = findRule("statistical_concentration_vendor_opd");
+
+  it("flag OPD dengan vendor dominan > 50% share", () => {
+    const rows: SP2DRow[] = [];
+    // OPD A: vendor X dapat 800jt, 4 vendor lain @50jt → total 1 M, X share 80%.
+    rows.push(
+      row({ _idx: 0, nilai: 800_000_000, skpd: "DINAS_A", penyedia: "PT X", no_sp2d: "A1" }),
+    );
+    for (let i = 0; i < 4; i++) {
+      rows.push(
+        row({
+          _idx: i + 1,
+          nilai: 50_000_000,
+          skpd: "DINAS_A",
+          penyedia: `PT V${i}`,
+          no_sp2d: `A-V${i}`,
+        }),
+      );
+    }
+    // OPD B: 5 vendor merata @200jt → tidak boleh ke-flag.
+    for (let i = 0; i < 5; i++) {
+      rows.push(
+        row({
+          _idx: 100 + i,
+          nilai: 200_000_000,
+          skpd: "DINAS_B",
+          penyedia: `PT W${i}`,
+          no_sp2d: `B${i}`,
+        }),
+      );
+    }
+    const hit = rule.evaluate(buildRuleContext(rows));
+    const flaggedIds = hit.flagged.map((r) => r.no_sp2d);
+    expect(flaggedIds).toContain("A1");
+    expect(flaggedIds).not.toContain("B0");
+  });
+
+  it("skip OPD dengan total belanja < Rp 1 M", () => {
+    const rows: SP2DRow[] = [];
+    rows.push(row({ _idx: 0, nilai: 500_000_000, skpd: "DINAS_KECIL", penyedia: "PT X" }));
+    for (let i = 0; i < 5; i++) {
+      rows.push(
+        row({
+          _idx: i + 1,
+          nilai: 10_000_000,
+          skpd: "DINAS_KECIL",
+          penyedia: `PT V${i}`,
+        }),
+      );
+    }
+    const hit = rule.evaluate(buildRuleContext(rows));
+    expect(hit.flagged).toEqual([]);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Rule: statistical_round_distribution
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe("statistical_round_distribution rule", () => {
+  const rule = findRule("statistical_round_distribution");
+
+  it("flag akun dengan > 30% round-million SP2D", () => {
+    const rows: SP2DRow[] = [];
+    // 15 round (75%), 5 non-round → ratio 75% > 30%.
+    for (let i = 0; i < 15; i++) {
+      rows.push(
+        row({
+          _idx: i,
+          nilai: 10_000_000 * (i + 1),
+          kode_rek: "5202",
+          no_sp2d: `ROUND-${i}`,
+        }),
+      );
+    }
+    for (let i = 0; i < 5; i++) {
+      rows.push(
+        row({
+          _idx: 100 + i,
+          nilai: 12_345_678 + i,
+          kode_rek: "5202",
+          no_sp2d: `NONROUND-${i}`,
+        }),
+      );
+    }
+    const hit = rule.evaluate(buildRuleContext(rows));
+    const ids = hit.flagged.map((r) => r.no_sp2d);
+    expect(ids).toContain("ROUND-0");
+    // Non-round tidak ke-flag.
+    expect(ids).not.toContain("NONROUND-0");
+    expect(ids.length).toBe(15);
+  });
+
+  it("skip akun pegawai walau ratio round > 30%", () => {
+    const rows: SP2DRow[] = [];
+    for (let i = 0; i < 25; i++) {
+      rows.push(
+        row({ _idx: i, nilai: 5_000_000, kode_rek: "5101", no_sp2d: `GAJI-${i}` }),
+      );
+    }
+    const hit = rule.evaluate(buildRuleContext(rows));
+    expect(hit.flagged).toEqual([]);
+  });
+});
