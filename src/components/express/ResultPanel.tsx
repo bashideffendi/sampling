@@ -288,5 +288,9 @@ function paramForMethod(
       return { method: "judgmental", param: params.judgmental };
     case "attribute":
       return { method: "attribute", param: params.attribute };
+    case "classical":
+      return { method: "classical", param: params.classical };
+    case "discovery":
+      return { method: "discovery", param: params.discovery };
   }
 }

@@ -13,6 +13,8 @@ import {
   attributeSelection,
   upperDeviationRate,
 } from "./attribute";
+import { classicalSampleSize, classicalSelection } from "./classical";
+import { discoverySampleSize, discoverySelection } from "./discovery";
 
 export {
   musSampleSize,
@@ -25,6 +27,10 @@ export {
   attributeSampleSizeWithMeta,
   attributeSelection,
   upperDeviationRate,
+  classicalSampleSize,
+  classicalSelection,
+  discoverySampleSize,
+  discoverySelection,
 };
 
 export function runSampling(
@@ -42,8 +48,17 @@ export function runSampling(
       return judgmentalSelection(populasi, mp.param);
     case "attribute":
       return attributeSelection(populasi, { ...mp.param, populationSize: populasi.length });
+    case "classical":
+      return classicalSelection(populasi, {
+        ...mp.param,
+        populationSize: populasi.length,
+      });
+    case "discovery":
+      return discoverySelection(populasi, {
+        ...mp.param,
+        populationSize: populasi.length,
+      });
     default: {
-      // exhaustive check
       const _exhaustive: never = mp;
       throw new Error(`Unknown sampling method: ${JSON.stringify(_exhaustive)}`);
     }

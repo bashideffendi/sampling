@@ -9,6 +9,8 @@ const METHODS: Array<{ key: SamplingMethod; label: string; sub: string }> = [
   { key: "stratified", label: "STR", sub: "Stratified" },
   { key: "judgmental", label: "JDG", sub: "Judgmental" },
   { key: "attribute", label: "ATR", sub: "Attribute" },
+  { key: "classical", label: "CV", sub: "Classical Var." },
+  { key: "discovery", label: "DSC", sub: "Discovery" },
 ];
 
 export function MethodTabs() {

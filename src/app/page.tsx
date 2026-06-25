@@ -80,7 +80,7 @@ function Hero() {
 }
 
 const HERO_POINTS = [
-  "Lima metode statistik: Monetary Unit, Simple Random, Stratified, Judgmental, dan Attribute.",
+  "Tujuh metode statistik: Monetary Unit, Simple Random, Stratified, Judgmental, Attribute, Classical Variables, dan Discovery.",
   <>
     Formula merujuk <strong className="font-medium text-[var(--color-ink)]">AICPA</strong> (American Institute of Certified Public Accountants) Audit Guide.
   </>,
@@ -168,13 +168,10 @@ function MethodsBand() {
     <section className="mb-24 border-y border-[var(--color-border)] py-10">
       <div className="mb-7 flex items-baseline justify-between">
         <h2 className="serif text-xl font-medium tracking-tight text-[var(--color-ink)]">
-          Lima Metode
+          Tujuh Metode
         </h2>
-        <span className="mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-text-subtle)]">
-          v0.1
-        </span>
       </div>
-      <div className="grid gap-x-12 gap-y-6 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-x-12 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
         {METHODS.map((m, idx) => (
           <Link
             key={m.slug}
@@ -278,4 +275,6 @@ const METHODS = [
   { slug: "stratified", code: "STR", name: "Stratified", use: "Variansi besar — bagi stratum, sampel per layer." },
   { slug: "judgmental", code: "JDG", name: "Judgmental", use: "Risk-based targeted. Wajib rationale auditor." },
   { slug: "attribute", code: "ATR", name: "Attribute", use: "Test of controls — tabel AICPA 90/95/99%." },
+  { slug: "classical", code: "CV", name: "Classical Var.", use: "MPU/Ratio/Difference estimator dengan FPC." },
+  { slug: "discovery", code: "DSC", name: "Discovery", use: "Zero-defect tolerance — fraud detection." },
 ];

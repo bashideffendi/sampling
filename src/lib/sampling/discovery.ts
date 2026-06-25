@@ -1,0 +1,86 @@
+/**
+ * Discovery Sampling — fraud detection / zero-defect tolerance.
+ *
+ * Goal: dengan confidence 1-α, deteksi MINIMAL 1 occurrence kalau expected rate p.
+ * Sample size = ceil( ln(α) / ln(1 - p) )
+ *   dimana α = 1 - confidence (mis. 0.05 untuk 95% confidence)
+ *
+ * Use case audit BPK: pengujian indikasi fraud / kecurangan, pengujian kontrol
+ * yang kritikal (zero defect required), uji kepatuhan compliance dengan
+ * tolerable deviation = 0.
+ *
+ * Edge case:
+ *   - p = 0 → throw (gak masuk akal expected zero, formula divergent)
+ *   - p sangat kecil → n menjadi sangat besar (asymptotic), trade-off effort
+ *   - p tinggi (>0.1) → n kecil, tapi ini tipikal substantive test bukan discovery
+ *
+ * Selection: SRS dengan PRNG seeded.
+ */
+
+import type {
+  DiscoveryParam,
+  SamplingResult,
+  SP2DRow,
+  SelectedItem,
+} from "@/types";
+import { mulberry32, sampleIndices } from "@/lib/prng/mulberry32";
+
+export interface DiscoverySampleSize {
+  n: number;
+  alpha: number;
+  expectedRate: number;
+}
+
+export function discoverySampleSize(param: DiscoveryParam): DiscoverySampleSize {
+  const { populationSize, confidenceLevel, expectedOccurrenceRate } = param;
+  if (populationSize <= 0) throw new Error("Discovery: populationSize harus > 0.");
+  if (expectedOccurrenceRate <= 0 || expectedOccurrenceRate >= 1)
+    throw new Error(
+      "Discovery: expectedOccurrenceRate harus di (0, 1). p=0 = formula divergent (n tak terbatas).",
+    );
+
+  const alpha = 1 - confidenceLevel;
+  // n = ln(α) / ln(1 - p)
+  const nRaw = Math.log(alpha) / Math.log(1 - expectedOccurrenceRate);
+  const n = Math.min(populationSize, Math.max(1, Math.ceil(nRaw)));
+  return { n, alpha, expectedRate: expectedOccurrenceRate };
+}
+
+export function discoverySelection(
+  populasi: SP2DRow[],
+  param: DiscoveryParam,
+): SamplingResult {
+  if (populasi.length === 0) throw new Error("Discovery: populasi kosong.");
+  const sizing = discoverySampleSize({
+    ...param,
+    populationSize: populasi.length,
+  });
+  const rng = mulberry32(param.seed);
+  const indices = sampleIndices(populasi.length, sizing.n, rng);
+  const ordered = [...populasi].sort((a, b) => (a.no_sp2d < b.no_sp2d ? -1 : 1));
+  const selectedItems: SelectedItem[] = indices.map((i) => ({
+    row: ordered[i],
+    reason: "selected",
+  }));
+
+  const warnings: string[] = [];
+  if (sizing.n >= populasi.length * 0.5) {
+    warnings.push(
+      `Sample size ${sizing.n} >= 50% populasi (${populasi.length}). Discovery sampling kurang efisien di kasus ini — pertimbangkan substantive test biasa.`,
+    );
+  }
+
+  return {
+    method: "discovery",
+    param,
+    sampleSize: sizing.n,
+    populasiCount: populasi.length,
+    populasiNilai: populasi.reduce((s, r) => s + r.nilai, 0),
+    seed: param.seed,
+    selectedItems,
+    computedAt: new Date().toISOString(),
+    rfSource:
+      "Discovery sampling — Poisson approximation. Reference: AICPA Audit Guide: Audit Sampling, Discovery Sampling chapter.",
+    warnings,
+  };
+}

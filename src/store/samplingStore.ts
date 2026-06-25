@@ -12,6 +12,8 @@ import type {
   StratifiedParam,
   JudgmentalParam,
   AttributeParam,
+  ClassicalParam,
+  DiscoveryParam,
   SamplingResult,
 } from "@/types";
 import type {
@@ -49,6 +51,8 @@ interface MethodParams {
   stratified: StratifiedParam;
   judgmental: JudgmentalParam;
   attribute: AttributeParam;
+  classical: ClassicalParam;
+  discovery: DiscoveryParam;
 }
 
 const DEFAULT_PARAMS: MethodParams = {
@@ -104,6 +108,22 @@ const DEFAULT_PARAMS: MethodParams = {
     confidenceLevel: 0.95,
     tolerableDeviationRate: 0.05,
     expectedDeviationRate: 0.01,
+    seed: 42,
+  },
+  classical: {
+    populationSize: 0,
+    confidenceLevel: 0.95,
+    estimator: "mpu",
+    expectedStdev: 5_000_000,
+    tolerableMisstatement: 500_000_000,
+    expectedMisstatement: 50_000_000,
+    allowanceFraction: 0.5,
+    seed: 42,
+  },
+  discovery: {
+    populationSize: 0,
+    confidenceLevel: 0.95,
+    expectedOccurrenceRate: 0.005,
     seed: 42,
   },
 };

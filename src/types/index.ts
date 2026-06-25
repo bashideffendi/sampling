@@ -27,7 +27,14 @@ export interface SP2DRow {
   _idx: number; // posisi original di file (buat audit trail)
 }
 
-export type SamplingMethod = "mus" | "srs" | "stratified" | "judgmental" | "attribute";
+export type SamplingMethod =
+  | "mus"
+  | "srs"
+  | "stratified"
+  | "judgmental"
+  | "attribute"
+  | "classical"
+  | "discovery";
 
 export interface PopulasiMeta {
   count: number;
@@ -102,12 +109,43 @@ export interface AttributeParam {
   seed: number;
 }
 
+export type ClassicalEstimator = "mpu" | "ratio" | "difference";
+
+export interface ClassicalParam {
+  populationSize: number;
+  confidenceLevel: ConfidenceLevel;
+  estimator: ClassicalEstimator;
+  /** Estimasi std dev populasi (auditor judgment dari pilot atau historical). */
+  expectedStdev: number;
+  /** Tolerable Misstatement (Rp). */
+  tolerableMisstatement: number;
+  /** Expected Misstatement (Rp). */
+  expectedMisstatement: number;
+  /**
+   * Allowance fraction untuk planned precision A.
+   * A = (TM − EM) × (1 − allowanceFraction). Audit standard 0.5–0.7.
+   * Critical: BUKAN A = TM langsung (under-sampling per AICPA correction).
+   */
+  allowanceFraction: number;
+  seed: number;
+}
+
+export interface DiscoveryParam {
+  populationSize: number;
+  confidenceLevel: ConfidenceLevel;
+  /** Expected occurrence rate populasi (e.g. 0.001 = 0.1% fraud baseline). */
+  expectedOccurrenceRate: number;
+  seed: number;
+}
+
 export type MethodParam =
   | { method: "mus"; param: MUSParam }
   | { method: "srs"; param: SRSParam }
   | { method: "stratified"; param: StratifiedParam }
   | { method: "judgmental"; param: JudgmentalParam }
-  | { method: "attribute"; param: AttributeParam };
+  | { method: "attribute"; param: AttributeParam }
+  | { method: "classical"; param: ClassicalParam }
+  | { method: "discovery"; param: DiscoveryParam };
 
 export interface SelectedItem {
   row: SP2DRow;

@@ -121,6 +121,47 @@ const METODE: Record<string, MetodeContent> = {
     output: ["Sample size dari tabel AICPA", "Upper Deviation Rate post-test (Poisson approx)"],
     sumber: "AICPA Audit Guide: Audit Sampling (2024 ed.), Appendix A, Tables A-1 / A-2.",
   },
+  classical: {
+    slug: "classical",
+    name: "Classical Variables Sampling",
+    code: "CV",
+    tagline: "Estimasi nilai populasi dari sampel — Mean-per-Unit, Ratio, atau Difference estimator.",
+    kapan: [
+      "Substantive test atas nilai dengan estimasi populasi",
+      "Populasi cukup homogen (σ tidak ekstrem)",
+      "Alternatif MUS kalau auditor butuh confidence interval estimasi total",
+    ],
+    formula: "n = (Z × σ × N / A)² dengan FPC adjustment\nA = (TM − EM) × (1 − allowanceFraction)",
+    param: [
+      { name: "Estimator", description: "MPU / Ratio / Difference", default: "MPU" },
+      { name: "Expected Std Dev", description: "σ populasi (dari pilot)", default: "harus auditor estimate" },
+      { name: "Tolerable Misstatement", description: "Batas atas salah saji", default: "50-75% PM" },
+      { name: "Expected Misstatement", description: "Ekspektasi salah saji", default: "0 atau dari historical" },
+      { name: "Allowance Fraction", description: "Buat planned precision A", default: "0.5-0.7" },
+    ],
+    output: ["Sample size (FPC adjusted)", "Daftar SP2D acak terpilih"],
+    catatan: "KOREKSI audit: planned precision A < (TM − EM). JANGAN A = TM langsung — under-sampling parah, gak detect material misstatement di confidence claim. v0.3.6 ship MPU formula only; Ratio/Difference projection defer ke v0.4 (butuh pilot data).",
+    sumber: "AICPA Audit Guide: Audit Sampling (2024 ed.), Classical Variables Sampling.",
+  },
+  discovery: {
+    slug: "discovery",
+    name: "Discovery Sampling",
+    code: "DSC",
+    tagline: "Zero-defect tolerance — deteksi minimal 1 occurrence dengan confidence tertentu. Buat fraud detection.",
+    kapan: [
+      "Pengujian indikasi fraud / kecurangan",
+      "Pengujian kontrol kritikal (zero defect required)",
+      "Compliance dengan tolerable deviation = 0",
+    ],
+    formula: "n = ceil(ln(α) / ln(1 − p))\nα = 1 − confidence, p = expected occurrence rate",
+    param: [
+      { name: "Confidence Level", description: "Tingkat keyakinan deteksi", default: "95%" },
+      { name: "Expected Occurrence Rate", description: "p baseline (mis. 0.005 = 0.5%)", default: "0.5% (fraud baseline)" },
+    ],
+    output: ["Sample size (Poisson approximation)", "Daftar SP2D acak terpilih"],
+    catatan: "Edge case: p sangat kecil → n bisa sangat besar (asymptotic). Kalau n ≥ 50% populasi, app kasih warning — pertimbangkan substantive test biasa.",
+    sumber: "AICPA Audit Guide: Audit Sampling, Discovery Sampling chapter.",
+  },
 };
 
 export function generateStaticParams() {

@@ -11,6 +11,8 @@ export function ParamPanel() {
   if (method === "stratified") return <StratifiedPanel />;
   if (method === "judgmental") return <JudgmentalPanel />;
   if (method === "attribute") return <AttributePanel />;
+  if (method === "classical") return <ClassicalPanel />;
+  if (method === "discovery") return <DiscoveryPanel />;
   return null;
 }
 
@@ -335,6 +337,106 @@ function AttributePanel() {
         label="Seed PRNG"
         value={param.seed}
         onChange={(v) => setParam("attribute", { seed: Math.floor(v) })}
+      />
+    </PanelShell>
+  );
+}
+
+function ClassicalPanel() {
+  const param = useSamplingStore((s) => s.params.classical);
+  const setParam = useSamplingStore((s) => s.setParam);
+  return (
+    <PanelShell title="Parameter Classical Variables (MPU)">
+      <label className="block">
+        <div className="mb-1 text-sm text-[var(--color-text)]">Estimator</div>
+        <div className="flex gap-1.5">
+          {(["mpu", "ratio", "difference"] as const).map((e) => (
+            <button
+              key={e}
+              onClick={() => setParam("classical", { estimator: e })}
+              className={`mono flex-1 rounded border px-3 py-1.5 text-sm transition ${
+                param.estimator === e
+                  ? "border-[var(--color-accent)] bg-[var(--color-surface-2)] text-[var(--color-accent)]"
+                  : "border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-border-strong)]"
+              }`}
+            >
+              {e.toUpperCase()}
+            </button>
+          ))}
+        </div>
+        <div className="mt-1 text-xs text-[var(--color-text-subtle)]">
+          MPU = Mean-per-Unit (paling umum). Ratio/Difference butuh pilot data.
+        </div>
+      </label>
+      <ConfidenceField
+        value={param.confidenceLevel}
+        onChange={(v) => setParam("classical", { confidenceLevel: v })}
+      />
+      <NumberField
+        label="Expected Std Dev populasi (Rp)"
+        value={param.expectedStdev}
+        onChange={(v) => setParam("classical", { expectedStdev: v })}
+        unit="Rp"
+        hint="σ estimasi dari pilot atau historical (jangan guess)"
+      />
+      <NumberField
+        label="Tolerable Misstatement (TM)"
+        value={param.tolerableMisstatement}
+        onChange={(v) => setParam("classical", { tolerableMisstatement: v })}
+        unit="Rp"
+      />
+      <NumberField
+        label="Expected Misstatement (EM)"
+        value={param.expectedMisstatement}
+        onChange={(v) => setParam("classical", { expectedMisstatement: v })}
+        unit="Rp"
+      />
+      <NumberField
+        label="Allowance Fraction"
+        value={param.allowanceFraction}
+        onChange={(v) => setParam("classical", { allowanceFraction: v })}
+        step={0.05}
+        unit="0-1"
+        hint="0.5-0.7 typical. A = (TM−EM) × (1−frac). JANGAN A = TM (under-sampling)."
+      />
+      <NumberField
+        label="Seed PRNG"
+        value={param.seed}
+        onChange={(v) => setParam("classical", { seed: Math.floor(v) })}
+      />
+      <div className="rounded border border-[var(--color-warn)] bg-[var(--color-surface-2)] p-2 text-xs text-[var(--color-text-muted)]">
+        Catatan: v0.3.6 ship MPU sample size only. Ratio/Difference
+        projection butuh pilot — defer ke v0.4.
+      </div>
+    </PanelShell>
+  );
+}
+
+function DiscoveryPanel() {
+  const param = useSamplingStore((s) => s.params.discovery);
+  const setParam = useSamplingStore((s) => s.setParam);
+  return (
+    <PanelShell title="Parameter Discovery Sampling">
+      <div className="rounded border border-[var(--color-accent)] bg-[var(--color-surface-2)] p-2 text-xs text-[var(--color-text-muted)]">
+        Zero-defect tolerance. Goal: deteksi MINIMAL 1 occurrence dengan
+        confidence tertentu. Cocok buat fraud detection / kontrol kritikal.
+      </div>
+      <ConfidenceField
+        value={param.confidenceLevel}
+        onChange={(v) => setParam("discovery", { confidenceLevel: v })}
+      />
+      <NumberField
+        label="Expected Occurrence Rate"
+        value={param.expectedOccurrenceRate}
+        onChange={(v) => setParam("discovery", { expectedOccurrenceRate: v })}
+        step={0.001}
+        unit="proporsi 0-1"
+        hint="Mis 0.005 = 0.5% baseline fraud rate. Lebih kecil → n lebih besar."
+      />
+      <NumberField
+        label="Seed PRNG"
+        value={param.seed}
+        onChange={(v) => setParam("discovery", { seed: Math.floor(v) })}
       />
     </PanelShell>
   );

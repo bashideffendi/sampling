@@ -316,6 +316,8 @@ const METHOD_LABEL: Record<SamplingResult["method"], string> = {
   stratified: "Stratified Random Sampling",
   judgmental: "Judgmental Sampling (Non-Statistical)",
   attribute: "Attribute Sampling (Test of Controls)",
+  classical: "Classical Variables Sampling (MPU)",
+  discovery: "Discovery Sampling (Zero-Defect)",
 };
 
 export function buildSeedBundle(

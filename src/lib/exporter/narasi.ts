@@ -27,7 +27,45 @@ export function narasiMetodologi(
       return judgmental(result, populasi, opts);
     case "attribute":
       return attribute(result, populasi, opts);
+    case "classical":
+      return classical(result, populasi, opts);
+    case "discovery":
+      return discovery(result, populasi, opts);
   }
+}
+
+function classical(r: SamplingResult, p: PopulasiMeta, opts: NarasiOpts): string {
+  const param = r.param as { confidenceLevel: number; estimator: string; expectedStdev: number; tolerableMisstatement: number; expectedMisstatement: number; allowanceFraction: number };
+  const conf = (param.confidenceLevel * 100).toFixed(0);
+  return [
+    header(opts),
+    "",
+    `Pengujian substantive atas ${"{akun_belanja}"} TA ${opts.tahun ?? "{tahun}"} dilakukan dengan metode Classical Variables Sampling (${param.estimator.toUpperCase()}). Populasi: ${p.count.toLocaleString("id-ID")} dokumen SP2D senilai ${formatRupiah(p.totalNilai)}.`,
+    "",
+    `Parameter: tingkat keyakinan ${conf}%, expected standard deviation σ = ${formatRupiah(param.expectedStdev)}, Tolerable Misstatement ${formatRupiah(param.tolerableMisstatement)}, Expected Misstatement ${formatRupiah(param.expectedMisstatement)}, allowance fraction ${param.allowanceFraction}.`,
+    "",
+    `Sample size dihitung dengan formula n = (Z × σ × N / A)² + FPC, dengan planned precision A = (TM − EM) × (1 − allowance) — bukan A = TM langsung. Hasil: ${r.sampleSize} SP2D dipilih acak menggunakan PRNG mulberry32 (seed: ${r.seed}).`,
+    "",
+    `Hash SHA-256 populasi: ${p.hashSha256.slice(0, 16)}…`,
+  ].join("\n");
+}
+
+function discovery(r: SamplingResult, p: PopulasiMeta, opts: NarasiOpts): string {
+  const param = r.param as { confidenceLevel: number; expectedOccurrenceRate: number };
+  const conf = (param.confidenceLevel * 100).toFixed(0);
+  return [
+    header(opts),
+    "",
+    `Pengujian indikasi salah saji material/fraud atas SP2D ${opts.entitas ?? "{entitas}"} TA ${opts.tahun ?? "{tahun}"} dilakukan dengan metode Discovery Sampling. Populasi: ${p.count.toLocaleString("id-ID")} dokumen.`,
+    "",
+    `Parameter zero-defect: tingkat keyakinan ${conf}% (α = ${(1 - param.confidenceLevel).toFixed(3)}), expected occurrence rate p = ${(param.expectedOccurrenceRate * 100).toFixed(2)}%.`,
+    "",
+    `Sample size dihitung dengan formula Poisson approximation: n = ⌈ln(α) / ln(1 − p)⌉. Hasil: ${r.sampleSize} SP2D dipilih acak menggunakan PRNG mulberry32 (seed: ${r.seed}).`,
+    "",
+    `Kesimpulan: jika sampel pengujian menemukan ≥1 occurrence, indikasi ada fraud/salah saji material; auditor wajib expand sample. Jika 0 occurrence, dapat disimpulkan dengan confidence ${conf}% bahwa occurrence rate populasi < ${(param.expectedOccurrenceRate * 100).toFixed(2)}%.`,
+    "",
+    `Hash SHA-256 populasi: ${p.hashSha256.slice(0, 16)}…`,
+  ].join("\n");
 }
 
 function header(opts: NarasiOpts): string {
