@@ -34,7 +34,17 @@ export default function ClusterExplorerPage() {
       return;
     }
     setRunning(true);
-    queueMicrotask(() => {
+    // queueMicrotask defer cuma 1 tick — UI freeze 1-2 detik di 39k row.
+    // requestIdleCallback kasih browser napas repaint dulu, fallback setTimeout.
+    type RIC = (cb: () => void) => void;
+    const win = window as Window & { requestIdleCallback?: RIC };
+    const schedule: RIC =
+      typeof win.requestIdleCallback === "function"
+        ? win.requestIdleCallback.bind(win)
+        : (cb) => {
+            setTimeout(cb, 0);
+          };
+    schedule(() => {
       try {
         const r = detectClusters(populasi, params);
         setResult(r);

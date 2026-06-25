@@ -40,13 +40,18 @@ export default function NotebookPage() {
   const loading = useNotebookStore((s) => s.loading);
   const load = useNotebookStore((s) => s.load);
   const loadPopulasiCache = useSamplingStore((s) => s.loadPopulasiFromCache);
+  const setDraftMeta = useSamplingStore((s) => s.setDraftMeta);
 
   useEffect(() => {
     if (params?.id) {
+      // Sinkron draftMeta.draftId DULU — loadPopulasiFromCache baca
+      // capcipcup:populasi:${draftMeta.draftId} dari IDB.
+      // Tanpa ini, populasi cache miss / ambil populasi draft lain.
+      setDraftMeta({ draftId: params.id });
       void load(params.id);
       void loadPopulasiCache();
     }
-  }, [params?.id, load, loadPopulasiCache]);
+  }, [params?.id, load, loadPopulasiCache, setDraftMeta]);
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-8">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, AlertTriangle } from "lucide-react";
 import type { SamplingResult } from "@/types";
 import { formatRupiah } from "@/lib/utils";
@@ -35,6 +35,11 @@ export function MisstatementInput({ result, confidence, onChange }: Misstatement
   );
   const [items, setItems] = useState<ItemEntry[]>(initialItems);
 
+  // Auto re-sync items kalau initialItems berubah (mis. re-run sampling).
+  useEffect(() => {
+    setItems(initialItems);
+  }, [initialItems]);
+
   const interval = result.selectionInterval ?? 0;
 
   const uml = useMemo(() => {
@@ -48,17 +53,20 @@ export function MisstatementInput({ result, confidence, onChange }: Misstatement
         isTopStratum: i.isTopStratum,
       }));
     try {
-      const r = computeUML({
+      return computeUML({
         samplingInterval: interval,
         confidence,
         inputs,
       });
-      onChange?.(r);
-      return r;
     } catch {
       return null;
     }
-  }, [items, interval, confidence, onChange]);
+  }, [items, interval, confidence]);
+
+  // Side-effect ke parent dipisah dari useMemo (useMemo wajib pure).
+  useEffect(() => {
+    if (uml) onChange?.(uml);
+  }, [uml, onChange]);
 
   function updateItem(i: number, patch: Partial<ItemEntry>) {
     setItems((prev) => {

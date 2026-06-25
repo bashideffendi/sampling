@@ -15,6 +15,13 @@
  *    3–4 transaksi terpisah <Rp 200jt yg total >Rp 200jt = sinyal split.
  *  - Round number EXCLUDE akun 56xx (hibah), 57xx (bansos), honor, perjadin —
  *    di situ angka bulat normal karena lumpsum SBM.
+ *  - classifyPengadaan SUPPORT dua skema BAS sekaligus:
+ *      * Permendagri 13/2006 — kode_rek 522/523/524 (BAS lama, masih dipakai
+ *        sebagian K/L pusat & beberapa pemda transisi).
+ *      * Permendagri 90/2019 (Kepmendagri 050-5889/2021) — kode_rek
+ *        5.1.02.xx.xx.xxxx (barang/jasa), 5.2.xx (modal). Ini dipakai mayoritas
+ *        pemda sejak TA 2022. Tanpa support ini, file SIPD pemda akan
+ *        classify-as-'unknown' SEMUA dan rule near_pl_* gak fire — BUG v0.3.7.
  */
 
 import type { SP2DRow } from "@/types";
@@ -43,20 +50,56 @@ export const SPLIT_WINDOW_DAYS = 7;
 
 /**
  * Klasifikasi best-effort kategori pengadaan dari kode_rek belanja.
- * Skema umum Permendagri 90/2019 + KMK belanja:
- *   522 — Belanja Barang dan Jasa (mencakup Jasa Lainnya juga di pemda)
- *   523 — Belanja Modal (Pekerjaan Konstruksi sering masuk 523.x)
- *   524 — Jasa Konsultansi (di sebagian pemda 524 = perjalanan dinas;
- *         klasifikasi konsultansi sering di sub-rincian 522.11/522.19;
- *         pendekatan ini BEST-EFFORT, auditor wajib verifikasi).
+ *
+ * DUKUNG DUA SKEMA BAS:
+ *
+ *  A. Permendagri 13/2006 (BAS lama — masih dipakai sebagian K/L pusat):
+ *       522 → Belanja Barang dan Jasa (termasuk Jasa Lainnya)
+ *       523 → Belanja Modal (Pekerjaan Konstruksi sering masuk 523.x)
+ *       524 → Jasa Konsultansi (di sebagian pemda 524 = perjadin; best-effort)
+ *
+ *  B. Permendagri 90/2019 jo Kepmendagri 050-5889/2021 (BAS pemda saat ini):
+ *       5.1.02.01.xx → Belanja Barang Pakai Habis / Tak Pakai Habis
+ *       5.1.02.02.xx → Belanja Jasa
+ *       5.1.02.03.xx → Belanja Pemeliharaan
+ *       5.1.02.04.xx → Belanja Perjalanan Dinas
+ *       5.2.xx       → Belanja Modal (termasuk 5.2.02 Pekerjaan Konstruksi)
+ *
+ *   Setelah strip non-digit, kode 5.1.02.xx jadi '5102xx' dan 5.2.xx jadi '52xx'.
+ *   Strategi: cek prefix '512' (5.1.02 → barang/jasa/pemeliharaan/perjadin)
+ *   atau '52' (5.2.xx → modal/konstruksi) untuk skema 90/2019, dan
+ *   '522'/'523'/'524' untuk skema 13/2006.
+ *
+ *   Catatan klasifikasi konsultansi di BAS 90/2019: kode konsultansi di skema
+ *   ini melebur di sub-rincian Belanja Jasa (5.1.02.02.xx) — tidak ada kode
+ *   level-3 yang murni konsultansi. Karena itu klasifikasi konsultansi DI
+ *   SINI hanya bisa diidentifikasi dari skema 13/2006 (prefix '524') —
+ *   auditor wajib verifikasi via uraian / sub-rincian.
  */
 export function classifyPengadaan(
   kodeRek: string | undefined,
 ): "barang_pk_jasa_lainnya" | "konsultansi" | "unknown" {
   if (!kodeRek) return "unknown";
   const k = kodeRek.replace(/[^0-9]/g, "");
+  if (!k) return "unknown";
+
+  // ---------- Skema A: Permendagri 13/2006 ----------
+  // 3-digit prefix klasik. Dicek duluan karena lebih spesifik.
   if (k.startsWith("522") || k.startsWith("523")) return "barang_pk_jasa_lainnya";
   if (k.startsWith("524")) return "konsultansi";
+
+  // ---------- Skema B: Permendagri 90/2019 ----------
+  // Setelah strip dots: 5.1.02.xx → '5102xx', 5.2.xx → '52xx'.
+  // Hati-hati ambiguitas: '52' di awal bisa muncul juga di prefix 13/2006
+  // (522/523/524), tapi itu sudah ditangkap di atas. Sisanya:
+  //   '5102' = 5.1.02 → Belanja Barang dan Jasa pemda (semua kategori
+  //            barang habis / tak habis / jasa / pemeliharaan / perjadin
+  //            di-bucket 'barang_pk_jasa_lainnya' karena threshold PL Rp 200jt
+  //            yang sama).
+  //   '52'   = 5.2 → Belanja Modal (termasuk 5.2.02 pekerjaan konstruksi).
+  if (k.startsWith("5102")) return "barang_pk_jasa_lainnya";
+  if (k.startsWith("52")) return "barang_pk_jasa_lainnya";
+
   return "unknown";
 }
 
@@ -159,7 +202,11 @@ export const ruleNearPL200jtBarangPKJasaLainnya: Rule = {
 /**
  * Mendekati batas Pengadaan Langsung Rp 100 jt (Jasa Konsultansi).
  * Range 90–100%: 90.000.000 ≤ nilai ≤ 100.000.000.
- * Hanya kena kode_rek 524 (heuristik konsultansi).
+ * Hanya kena kode_rek 524 (heuristik konsultansi — BAS Permendagri 13/2006).
+ *
+ * CATATAN BAS 90/2019: skema pemda tidak punya kode level-3 murni untuk
+ * konsultansi (melebur di 5.1.02.02.xx Belanja Jasa). Auditor yang pakai BAS
+ * 90/2019 perlu cross-check uraian / sub-rincian secara manual.
  */
 export const ruleNearPL100jtJasaKonsultansi: Rule = {
   id: "nilai_near_pl_100jt_jasa_konsultansi",

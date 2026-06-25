@@ -183,15 +183,34 @@ export const vendorConcentrationDominant: Rule = {
   run(ctx) {
     const shares = computeVendorShareByOPDAkun(ctx.populasi);
     const hits: RuleHit[] = [];
+    // Cap maks 5 hit per bucket (vendor+opd+akun). Sebelumnya semua rowIdxs
+    // di-emit → 1 vendor dengan 50 SP2D = 50 hit identik = tabel UI banjir
+    // duplikasi. Pilih top-5 by nilai biar auditor liat yang paling material.
+    const MAX_HITS_PER_BUCKET = 5;
     for (const bucket of shares.values()) {
       if (bucket.share <= CONCENTRATION_THRESHOLD) continue;
       const sharePct = (bucket.share * 100).toFixed(1);
-      for (const idx of bucket.rowIdxs) {
+      const rowsByValue = bucket.rowIdxs
+        .map((idx) => ({ idx, nilai: ctx.populasi.find((r) => r._idx === idx)?.nilai ?? 0 }))
+        .sort((a, b) => b.nilai - a.nilai);
+      const totalInBucket = rowsByValue.length;
+      const top = rowsByValue.slice(0, MAX_HITS_PER_BUCKET);
+      const moreNote =
+        totalInBucket > MAX_HITS_PER_BUCKET
+          ? ` (top ${MAX_HITS_PER_BUCKET} dari ${totalInBucket} SP2D vendor di bucket — sisanya disembunyikan)`
+          : "";
+      for (const r of top) {
         hits.push({
-          sp2dIdx: idx,
+          sp2dIdx: r.idx,
           severity: "high",
-          reason: `Vendor menguasai ${sharePct}% belanja OPD "${bucket.opd}" pada akun ${bucket.akun} (Rp ${bucket.vendorNilai.toLocaleString("id-ID")} dari Rp ${bucket.bucketTotal.toLocaleString("id-ID")}).`,
-          ref: { tag: "vendor_concentration" },
+          reason:
+            `Vendor menguasai ${sharePct}% belanja OPD "${bucket.opd}" pada akun ${bucket.akun} ` +
+            `(Rp ${bucket.vendorNilai.toLocaleString("id-ID")} dari Rp ${bucket.bucketTotal.toLocaleString("id-ID")})${moreNote}.`,
+          ref: {
+            tag: "vendor_concentration",
+            bucketRowCount: totalInBucket,
+            hitsShown: top.length,
+          },
         });
       }
     }

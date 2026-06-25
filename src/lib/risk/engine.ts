@@ -6,9 +6,11 @@
  * caller (UI / preset) yang harus kasih list rule final.
  *
  * Aturan eksekusi:
- * 1. Kalau `rule.defaultOff === true`, SKIP. Engine gak boleh diam-diam jalanin
- *    rule yang ditandai defaultOff; caller wajib eksplisit (mis. lewat
- *    enableRule(id) di UI) — biar gak surprising di production run.
+ * 1. Engine jalanin SEMUA rule yang dipassing. Caller (UI) tanggung jawab
+ *    filter rule aktif sebelum kirim ke runRiskRules. Kalau caller ngirim
+ *    rule yang ditandai `defaultOff`, engine TETAP jalanin — caller udah
+ *    eksplisit milih (mis. user click "Select All" di Risk Helper UI).
+ *    (Pre-v0.3.8 engine silently skip defaultOff → bug: "Select All" gak ngapain.)
  * 2. Setiap rule diukur durasi via performance.now(). Kalau lingkungan gak
  *    punya performance global (Node <16 lawas), fallback Date.now().
  * 3. `uniqueFlagged` deduplicate by `sp2dIdx` (original file index), bukan
@@ -39,11 +41,8 @@ export function runRiskRules(rules: Rule[], ctx: RuleContext): RiskReport {
   let totalHits = 0;
 
   for (const rule of rules) {
-    if (rule.defaultOff === true) {
-      // Caller wajib eksplisit kalau mau jalanin defaultOff. Engine gak ngakalin.
-      continue;
-    }
-
+    // Engine TIDAK skip defaultOff — caller udah filter via activeIds di UI.
+    // Skip silent dulu bikin "Select All" gak ngapain (bug v0.3.7).
     const start = now();
     const hits = rule.run(ctx);
     const runDurationMs = now() - start;

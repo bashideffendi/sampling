@@ -111,12 +111,16 @@ describe("runRiskRules", () => {
     }
   });
 
-  it("skips rule when defaultOff === true", () => {
+  it("runs defaultOff rule when caller explicitly includes it", () => {
+    // v0.3.8: engine TIDAK skip defaultOff. Caller (UI) yang filter rule aktif
+    // via activeIds. Sebelumnya engine silent skip → "Select All" gak fire rule.
     const rows = [mkRow(0), mkRow(1)];
     const report = runRiskRules([alwaysHit, skippedRule], mkCtx(rows));
-    expect(report.results.find((r) => r.ruleId === "test_skipped")).toBeUndefined();
-    expect(report.results).toHaveLength(1);
-    expect(report.totalHits).toBe(2); // cuma alwaysHit
+    const skippedResult = report.results.find((r) => r.ruleId === "test_skipped");
+    expect(skippedResult).toBeDefined();
+    expect(skippedResult?.hits).toHaveLength(2); // skippedRule flag semua row
+    expect(report.results).toHaveLength(2);
+    expect(report.totalHits).toBe(4); // alwaysHit=2 + skippedRule=2
   });
 
   it("returns ISO timestamp at runAt", () => {
