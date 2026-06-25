@@ -1,21 +1,18 @@
 /**
  * Risk Helper — public aggregator.
  *
- * v0.3.2 ship-set: VENDOR + AKUN rules (10 rules total).
- *
- * DEFERRED ke v0.3.3 (API drift dari workflow generator — beberapa agen invent
- * sendiri RiskRule type + RuleHit shape vs Foundation):
- *   - statistical (evaluate vs run, RuleHit.flagged array shape)
- *   - nilai (own Rule interface)
- *   - timing (own RiskRule interface)
- *   - cross-ref (own RiskRule interface)
- *
- * File .deferred preserved supaya port logic ke Foundation API tinggal rename.
+ * v0.3.3 ship-set: Vendor + Akun + Nilai + Timing + Cross-Ref + Statistical (~30 rules total).
+ * v0.3.2 deferred files (statistical/nilai/timing/cross-ref) ported ke Foundation API
+ * di v0.3.3 — semua import via Rule/RuleHit/RuleContext dari ../types.
  */
 
 import type { Rule, RuleCategory } from "./types";
 import { VENDOR_RULES } from "./rules/vendor";
 import { AKUN_RULES } from "./rules/akun";
+import { NILAI_RULES } from "./rules/nilai";
+import { TIMING_RULES } from "./rules/timing";
+import { CROSS_REF_RULES } from "./rules/cross-ref";
+import { STATISTICAL_RULES } from "./rules/statistical";
 
 export * from "./types";
 export { runRiskRules } from "./engine";
@@ -24,6 +21,10 @@ export { runRiskRules } from "./engine";
 export const ALL_RULES: ReadonlyArray<Rule> = [
   ...VENDOR_RULES,
   ...AKUN_RULES,
+  ...NILAI_RULES,
+  ...TIMING_RULES,
+  ...CROSS_REF_RULES,
+  ...STATISTICAL_RULES,
 ];
 
 /** Lookup rule by id. */

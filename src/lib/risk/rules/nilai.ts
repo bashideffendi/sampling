@@ -10,7 +10,7 @@
  *      * Jasa Konsultansi                              = Rp 100.000.000  (Pasal 38)
  *  - Rule "mendekati Rp 50jt" TIDAK lagi mengutip Perpres 16/2018 — angka itu
  *    bukan threshold pengadaan langsung di Perpres. Itu batas administratif
- *    SPK/Kuitansi yang sering muncul di juknis daerah. Citation: null.
+ *    SPK/Kuitansi yang sering muncul di juknis daerah. Citation: kosong.
  *  - Split paket pakai rolling-window SUM 7 hari per (vendor, OPD), bukan LAG.
  *    3–4 transaksi terpisah <Rp 200jt yg total >Rp 200jt = sinyal split.
  *  - Round number EXCLUDE akun 56xx (hibah), 57xx (bansos), honor, perjadin —
@@ -18,28 +18,11 @@
  */
 
 import type { SP2DRow } from "@/types";
+import type { Rule, RuleContext, RuleHit, Severity } from "../types";
 
-export type RuleSeverity = "low" | "medium" | "high";
-export type RuleCategory = "nilai" | "vendor" | "timing" | "akun" | "struktural";
-
-export interface RuleHit {
-  row: SP2DRow;
-  /** Penjelasan singkat kenapa baris ini ke-flag (buat tooltip / kolom catatan). */
-  note?: string;
-}
-
-export interface Rule {
-  id: string;
-  category: RuleCategory;
-  label: string;
-  severity: RuleSeverity;
-  defaultOn: boolean;
-  description: string;
-  /** Sitasi regulasi. null kalau heuristik murni (BUKAN regulasi). */
-  citation: string | null;
-  /** Jalankan rule terhadap seluruh populasi. Return baris yang ke-flag. */
-  run: (rows: SP2DRow[]) => RuleHit[];
-}
+// Re-export biar konsisten dengan modul rule lain (vendor.ts).
+export type RuleSeverity = Severity;
+export type { Rule, RuleContext, RuleHit };
 
 // ----------------------------------------------------------------------------
 // Constants
@@ -120,14 +103,14 @@ function groupKey(row: SP2DRow): string | null {
 }
 
 // ----------------------------------------------------------------------------
-// Rules
+// Rule 1: nilai_near_pl_200jt_barang_pk_jasa_lainnya
 // ----------------------------------------------------------------------------
 
 /**
- * 1) Mendekati batas Pengadaan Langsung Rp 200 jt (Barang / PK / Jasa Lainnya).
- *    Range 90–100% dari batas: 180.000.000 ≤ nilai ≤ 200.000.000.
- *    Hanya kena baris yg klasifikasi pengadaannya == barang_pk_jasa_lainnya
- *    (atau unknown — biar gak silent miss; ditandai uncertain di note).
+ * Mendekati batas Pengadaan Langsung Rp 200 jt (Barang / PK / Jasa Lainnya).
+ * Range 90–100% dari batas: 180.000.000 ≤ nilai ≤ 200.000.000.
+ * Hanya kena baris yg klasifikasi pengadaannya == barang_pk_jasa_lainnya
+ * (atau unknown — biar gak silent miss; ditandai uncertain di reason).
  */
 export const ruleNearPL200jtBarangPKJasaLainnya: Rule = {
   id: "nilai_near_pl_200jt_barang_pk_jasa_lainnya",
@@ -140,31 +123,43 @@ export const ruleNearPL200jtBarangPKJasaLainnya: Rule = {
     "untuk Barang / Pekerjaan Konstruksi / Jasa Lainnya. Indikasi potensi pemecahan paket " +
     "agar tetap bisa ditunjuk langsung tanpa tender.",
   citation: "Perpres 16/2018 jo 12/2021 Pasal 38–41 (Barang/PK/Jasa Lainnya)",
-  run(rows) {
+  run(ctx: RuleContext): RuleHit[] {
     const lo = PL_THRESHOLD_BARANG * 0.9; // 180 jt
     const hi = PL_THRESHOLD_BARANG; // 200 jt (inclusive)
     const hits: RuleHit[] = [];
-    for (const row of rows) {
+    for (const row of ctx.populasi) {
       if (!Number.isFinite(row.nilai)) continue;
       if (row.nilai < lo || row.nilai > hi) continue;
       const klas = classifyPengadaan(row.kode_rek);
       if (klas === "konsultansi") continue; // jelas bukan kategori ini
       const uncertain = klas === "unknown";
       hits.push({
-        row,
-        note:
+        sp2dIdx: row._idx,
+        severity: "high",
+        reason:
           `Nilai ${fmtRupiah(row.nilai)} di rentang 90–100% batas PL Rp 200 jt` +
           (uncertain ? " (klasifikasi pengadaan tidak dapat dipastikan dari kode_rek)" : ""),
+        ref: {
+          tag: "perpres_16_2018_pasal_38_41",
+          nilai: row.nilai,
+          threshold: PL_THRESHOLD_BARANG,
+          kategori: "barang_pk_jasa_lainnya",
+          klasifikasi: klas,
+        },
       });
     }
     return hits;
   },
 };
 
+// ----------------------------------------------------------------------------
+// Rule 2: nilai_near_pl_100jt_jasa_konsultansi
+// ----------------------------------------------------------------------------
+
 /**
- * 2) Mendekati batas Pengadaan Langsung Rp 100 jt (Jasa Konsultansi).
- *    Range 90–100%: 90.000.000 ≤ nilai ≤ 100.000.000.
- *    Hanya kena kode_rek 524 (heuristik konsultansi).
+ * Mendekati batas Pengadaan Langsung Rp 100 jt (Jasa Konsultansi).
+ * Range 90–100%: 90.000.000 ≤ nilai ≤ 100.000.000.
+ * Hanya kena kode_rek 524 (heuristik konsultansi).
  */
 export const ruleNearPL100jtJasaKonsultansi: Rule = {
   id: "nilai_near_pl_100jt_jasa_konsultansi",
@@ -176,28 +171,39 @@ export const ruleNearPL100jtJasaKonsultansi: Rule = {
     "Nilai SP2D Jasa Konsultansi berada di rentang 90–100% dari batas Pengadaan Langsung " +
     "Rp 100 juta. Di atas Rp 100 juta wajib seleksi konsultan.",
   citation: "Perpres 16/2018 Pasal 38 (Jasa Konsultansi)",
-  run(rows) {
+  run(ctx: RuleContext): RuleHit[] {
     const lo = PL_THRESHOLD_KONSULTANSI * 0.9; // 90 jt
     const hi = PL_THRESHOLD_KONSULTANSI; // 100 jt
     const hits: RuleHit[] = [];
-    for (const row of rows) {
+    for (const row of ctx.populasi) {
       if (!Number.isFinite(row.nilai)) continue;
       if (row.nilai < lo || row.nilai > hi) continue;
       if (classifyPengadaan(row.kode_rek) !== "konsultansi") continue;
       hits.push({
-        row,
-        note: `Nilai ${fmtRupiah(row.nilai)} di rentang 90–100% batas PL Jasa Konsultansi Rp 100 jt`,
+        sp2dIdx: row._idx,
+        severity: "high",
+        reason: `Nilai ${fmtRupiah(row.nilai)} di rentang 90–100% batas PL Jasa Konsultansi Rp 100 jt`,
+        ref: {
+          tag: "perpres_16_2018_pasal_38_konsultansi",
+          nilai: row.nilai,
+          threshold: PL_THRESHOLD_KONSULTANSI,
+          kategori: "jasa_konsultansi",
+        },
       });
     }
     return hits;
   },
 };
 
+// ----------------------------------------------------------------------------
+// Rule 3: nilai_near_spk_kuitansi_50jt
+// ----------------------------------------------------------------------------
+
 /**
- * 3) Mendekati batas pembayaran SPK / Kuitansi Rp 50 jt.
- *    Range 90–100%: 45.000.000 ≤ nilai ≤ 50.000.000.
- *    PENTING: Angka Rp 50 jt BUKAN threshold di Perpres 16/2018. Ini batas administratif
- *    SPK/Kuitansi yang lazim diatur di juknis daerah. Citation = null sengaja.
+ * Mendekati batas pembayaran SPK / Kuitansi Rp 50 jt.
+ * Range 90–100%: 45.000.000 ≤ nilai ≤ 50.000.000.
+ * PENTING: Angka Rp 50 jt BUKAN threshold di Perpres 16/2018. Ini batas administratif
+ * SPK/Kuitansi yang lazim diatur di juknis daerah. Citation sengaja dikosongkan.
  */
 export const ruleNearSPKKuitansi50jt: Rule = {
   id: "nilai_near_spk_kuitansi_50jt",
@@ -209,33 +215,43 @@ export const ruleNearSPKKuitansi50jt: Rule = {
     "Nilai SP2D berada di rentang 90–100% dari batas administratif pembayaran SPK/Kuitansi " +
     "Rp 50 juta yang lazim diatur di juknis pemda. Bisa jadi indikasi pemecahan kecil agar " +
     "cukup pakai kuitansi tanpa SPK.",
-  citation: null, // bukan Perpres 16/2018 — angka ini tidak ada di sana
-  run(rows) {
+  // Citation sengaja dikosongkan — bukan threshold Perpres 16/2018.
+  run(ctx: RuleContext): RuleHit[] {
     const lo = SPK_KUITANSI_THRESHOLD * 0.9; // 45 jt
     const hi = SPK_KUITANSI_THRESHOLD; // 50 jt
     const hits: RuleHit[] = [];
-    for (const row of rows) {
+    for (const row of ctx.populasi) {
       if (!Number.isFinite(row.nilai)) continue;
       if (row.nilai < lo || row.nilai > hi) continue;
       hits.push({
-        row,
-        note: `Nilai ${fmtRupiah(row.nilai)} di rentang 90–100% batas SPK/Kuitansi Rp 50 jt`,
+        sp2dIdx: row._idx,
+        severity: "medium",
+        reason: `Nilai ${fmtRupiah(row.nilai)} di rentang 90–100% batas SPK/Kuitansi Rp 50 jt`,
+        ref: {
+          tag: "spk_kuitansi_admin",
+          nilai: row.nilai,
+          threshold: SPK_KUITANSI_THRESHOLD,
+        },
       });
     }
     return hits;
   },
 };
 
+// ----------------------------------------------------------------------------
+// Rule 4: nilai_split_paket
+// ----------------------------------------------------------------------------
+
 /**
- * 4) Pemecahan Paket (split paket) — rolling-window 7 hari per (vendor, OPD).
- *    Algoritme:
- *      a. Group baris by (penyedia, skpd) — keduanya wajib ada.
- *      b. Sort by tgl_sp2d ascending.
- *      c. Sliding window: untuk setiap titik i, ambil semua j ≤ i yang tgl-nya
- *         dalam ≤ 7 hari dari tgl[i]. Hitung SUM nilai window.
- *      d. Kalau SUM > Rp 200 jt DAN tidak ada baris tunggal di window yang ≥ Rp 200 jt
- *         (artinya kalau salah satu sudah ≥ 200 jt, dia memang pakai tender; bukan split),
- *         tandai SEMUA baris di window sebagai hit.
+ * Pemecahan Paket (split paket) — rolling-window 7 hari per (vendor, OPD).
+ * Algoritme:
+ *   a. Group baris by (penyedia, skpd) — keduanya wajib ada.
+ *   b. Sort by tgl_sp2d ascending.
+ *   c. Sliding window: untuk setiap titik i, ambil semua j ≤ i yang tgl-nya
+ *      dalam ≤ 7 hari dari tgl[i]. Hitung SUM nilai window.
+ *   d. Kalau SUM > Rp 200 jt DAN tidak ada baris tunggal di window yang ≥ Rp 200 jt
+ *      (artinya kalau salah satu sudah ≥ 200 jt, dia memang pakai tender; bukan split),
+ *      tandai SEMUA baris di window sebagai hit.
  */
 export const ruleSplitPaket: Rule = {
   id: "nilai_split_paket",
@@ -248,7 +264,8 @@ export const ruleSplitPaket: Rule = {
     "melebihi Rp 200 juta, padahal tidak ada satu SP2D pun yang sendirian ≥ Rp 200 juta. " +
     "Pola ini konsisten dengan pemecahan paket agar tetap bisa pengadaan langsung.",
   citation: "Perpres 16/2018 jo 12/2021 Pasal 20 (larangan pemecahan paket)",
-  run(rows) {
+  run(ctx: RuleContext): RuleHit[] {
+    const rows = ctx.populasi;
     const groups = new Map<string, SP2DRow[]>();
     for (const row of rows) {
       if (!Number.isFinite(row.nilai)) continue;
@@ -266,6 +283,8 @@ export const ruleSplitPaket: Rule = {
 
     const flaggedIdx = new Set<number>();
     const noteByIdx = new Map<number, string>();
+    const sumByIdx = new Map<number, number>();
+    const countByIdx = new Map<number, number>();
     const windowMs = SPLIT_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
     for (const arr of groups.values()) {
@@ -277,8 +296,8 @@ export const ruleSplitPaket: Rule = {
       });
       let left = 0;
       for (let right = 0; right < sorted.length; right++) {
-        const tr = parseDateMs(sorted[right].tgl_sp2d)!;
-        while (left <= right && tr - parseDateMs(sorted[left].tgl_sp2d)! > windowMs) {
+        const tr = parseDateMs(sorted[right]!.tgl_sp2d)!;
+        while (left <= right && tr - parseDateMs(sorted[left]!.tgl_sp2d)! > windowMs) {
           left++;
         }
         const windowRows = sorted.slice(left, right + 1);
@@ -294,6 +313,8 @@ export const ruleSplitPaket: Rule = {
           if (!flaggedIdx.has(r._idx)) {
             flaggedIdx.add(r._idx);
             noteByIdx.set(r._idx, note);
+            sumByIdx.set(r._idx, sum);
+            countByIdx.set(r._idx, windowRows.length);
           }
         }
       }
@@ -301,19 +322,33 @@ export const ruleSplitPaket: Rule = {
 
     const hits: RuleHit[] = [];
     for (const row of rows) {
-      if (flaggedIdx.has(row._idx)) {
-        hits.push({ row, note: noteByIdx.get(row._idx) });
-      }
+      if (!flaggedIdx.has(row._idx)) continue;
+      hits.push({
+        sp2dIdx: row._idx,
+        severity: "high",
+        reason: noteByIdx.get(row._idx) ?? "Indikasi pemecahan paket dalam jendela 7 hari.",
+        ref: {
+          tag: "perpres_16_2018_pasal_20",
+          windowDays: SPLIT_WINDOW_DAYS,
+          windowSum: sumByIdx.get(row._idx) ?? 0,
+          windowCount: countByIdx.get(row._idx) ?? 0,
+          threshold: PL_THRESHOLD_BARANG,
+        },
+      });
     }
     return hits;
   },
 };
 
+// ----------------------------------------------------------------------------
+// Rule 5: nilai_round_number
+// ----------------------------------------------------------------------------
+
 /**
- * 5) Angka bulat mencurigakan (round number).
- *    nilai kelipatan Rp 1 jt utuh DAN ≥ Rp 50 jt.
- *    EXCLUDE: akun 56xx (hibah), 57xx (bansos), honor, perjalanan dinas
- *    — di situ angka bulat normal (lumpsum SBM).
+ * Angka bulat mencurigakan (round number).
+ * nilai kelipatan Rp 1 jt utuh DAN ≥ Rp 50 jt.
+ * EXCLUDE: akun 56xx (hibah), 57xx (bansos), honor, perjalanan dinas
+ * — di situ angka bulat normal (lumpsum SBM).
  */
 export const ruleRoundNumber: Rule = {
   id: "nilai_round_number",
@@ -325,17 +360,23 @@ export const ruleRoundNumber: Rule = {
     "Nilai SP2D ≥ Rp 50 juta dan kelipatan Rp 1 juta utuh. Pada transaksi pengadaan riil " +
     "angka bulat sempurna jarang muncul karena ada PPN/PPh dan harga satuan. Akun hibah, " +
     "bansos, honor, dan perjalanan dinas dikecualikan karena memang lumpsum SBM.",
-  citation: null,
-  run(rows) {
+  // Citation kosong — heuristik audit, bukan klaim regulasi.
+  run(ctx: RuleContext): RuleHit[] {
     const hits: RuleHit[] = [];
-    for (const row of rows) {
+    for (const row of ctx.populasi) {
       if (!Number.isFinite(row.nilai)) continue;
       if (row.nilai < ROUND_NUMBER_MIN) continue;
       if (!isRoundNumber(row.nilai)) continue;
       if (isExemptAccount(row)) continue;
       hits.push({
-        row,
-        note: `Nilai ${fmtRupiah(row.nilai)} bulat sempurna (kelipatan Rp 1 jt) — cek harga satuan vs PPN`,
+        sp2dIdx: row._idx,
+        severity: "medium",
+        reason: `Nilai ${fmtRupiah(row.nilai)} bulat sempurna (kelipatan Rp 1 jt) — cek harga satuan vs PPN`,
+        ref: {
+          tag: "round_number_heuristic",
+          nilai: row.nilai,
+          modulus: ROUND_NUMBER_MOD,
+        },
       });
     }
     return hits;

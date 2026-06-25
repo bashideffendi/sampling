@@ -17,44 +17,10 @@
  *   ada di SP2DRow). Engine tetap registrasi rule supaya UI bisa expose toggle + deskripsi.
  * - `timing_pre_libur_panjang` defaultOff, severity low — hardcode kalender libur ID
  *   yang umum (lebaran/natal/tahun baru/kemerdekaan). Tahun referensi 2025.
- *
- * Rule signature: predicate murni `(row: SP2DRow) => boolean`. Aggregate-style rule
- * (split, vendor repeat) hidup di file terpisah.
  */
 
 import type { SP2DRow } from "@/types";
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Rule type (shared shape, di-extract ke ../types.ts pas rule file ke-2 dibuat).
-// ──────────────────────────────────────────────────────────────────────────────
-
-export type RiskSeverity = "low" | "medium" | "high";
-
-export type RiskCategory =
-  | "timing"
-  | "vendor"
-  | "amount"
-  | "regulasi"
-  | "duplicate"
-  | "benford"
-  | "compliance";
-
-export interface RiskRule {
-  /** snake_case id, stabil — dipakai buat persist toggle + filter result */
-  id: string;
-  category: RiskCategory;
-  severity: RiskSeverity;
-  /** default state toggle di UI */
-  defaultOn: boolean;
-  /** label pendek buat UI */
-  label: string;
-  /** deskripsi 1-2 kalimat, jelasin kenapa ini flag dan caveat */
-  description: string;
-  /** citation regulasi (opsional) — JANGAN ngarang Perpres */
-  citation?: string;
-  /** predicate murni; return true = flag */
-  filter: (row: SP2DRow) => boolean;
-}
+import type { Rule, RuleContext, RuleHit } from "../types";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers — parse ISO yyyy-mm-dd jadi komponen tanpa tergantung timezone.
@@ -78,7 +44,7 @@ export function parseISODate(
 
 /**
  * Day-of-week buat tanggal kalender (0 = Sunday, 6 = Saturday).
- * Pakai algoritma Zeller-ish via Date.UTC supaya bebas timezone.
+ * Pakai Date.UTC supaya bebas timezone.
  */
 export function dayOfWeek(iso: string): number | null {
   const parts = parseISODate(iso);
@@ -108,15 +74,20 @@ export function isYearEndCritical(iso: string): boolean {
 
 /**
  * Cek heuristik: SP2D ini "LS gaji" / tunjangan rutin yang weekend-nya wajar.
- * Lihat jenis_spm (kalau ada) dulu, baru fallback ke kata kunci di uraian.
+ * Lihat jenis_spm (kalau ada) dulu, baru fallback ke kata kunci di uraian/keterangan.
  *
  * NOTE: gak boleh exclude semua "LS" — banyak LS pengadaan barang/jasa yang
  * harusnya tetap flag kalau pencairan di weekend. Yang di-exclude HANYA LS
  * yang sifatnya gaji/tunjangan/honor rutin (auto-generate by date).
  */
 export function isRutinGajiTunjangan(row: SP2DRow): boolean {
-  const jenis = (row.jenis_spm ?? "").toLowerCase();
-  const uraian = (row.uraian ?? "").toLowerCase();
+  const getStr = (v: unknown): string =>
+    typeof v === "string" ? v.toLowerCase() : "";
+
+  const r = row as unknown as Record<string, unknown>;
+  const jenis = getStr(r.jenis_spm);
+  const uraian = getStr(r.uraian);
+  const keterangan = getStr(r.keterangan);
 
   // Match "ls gaji", "ls tunjangan", "ls penghasilan" etc di jenis_spm
   if (
@@ -127,10 +98,11 @@ export function isRutinGajiTunjangan(row: SP2DRow): boolean {
     return true;
   }
 
-  // Fallback: kata kunci gaji/tunjangan/honor rutin di uraian
+  // Fallback: kata kunci gaji/tunjangan/honor rutin di uraian / keterangan
+  const text = `${uraian} ${keterangan}`;
   if (
     /\b(gaji|tunjangan(\s|$)|tukin|tpp|penghasilan tetap|tambahan penghasilan)\b/.test(
-      uraian,
+      text,
     )
   ) {
     return true;
@@ -144,8 +116,7 @@ export function isRutinGajiTunjangan(row: SP2DRow): boolean {
 // Tanggal merah single (mis 17 Agt) tetap dimasukin karena 1-3 hari sebelum =
 // burst pre-libur.
 //
-// TODO TA 2026: refresh tabel setelah SKB diumumkan. Datanya boleh di-overwrite
-// via param eksternal nantinya (ditaruh di config), sekarang hardcode dulu.
+// TODO TA 2026: refresh tabel setelah SKB diumumkan.
 // ──────────────────────────────────────────────────────────────────────────────
 
 export const LIBUR_NASIONAL_2025: ReadonlyArray<string> = [
@@ -168,15 +139,15 @@ export const LIBUR_NASIONAL_2025: ReadonlyArray<string> = [
 ];
 
 /**
- * True kalau ISO di-range 1-3 hari kalender sebelum salah satu tanggal merah.
- * Pakai diff via Date.UTC supaya bebas TZ.
+ * Return tanggal libur terdekat (1-3 hari ke depan) kalau ISO ada di window
+ * pre-libur. Null kalau tidak.
  */
-export function isPreLiburPanjang(
+export function findPreLiburTarget(
   iso: string,
   liburList: ReadonlyArray<string> = LIBUR_NASIONAL_2025,
-): boolean {
+): { libur: string; diffDays: number } | null {
   const sp2d = parseISODate(iso);
-  if (!sp2d) return false;
+  if (!sp2d) return null;
   const sp2dTs = Date.UTC(sp2d.y, sp2d.m - 1, sp2d.d);
   const ONE_DAY = 24 * 60 * 60 * 1000;
 
@@ -185,16 +156,42 @@ export function isPreLiburPanjang(
     if (!lp) continue;
     const liburTs = Date.UTC(lp.y, lp.m - 1, lp.d);
     const diffDays = (liburTs - sp2dTs) / ONE_DAY;
-    if (diffDays >= 1 && diffDays <= 3) return true;
+    if (diffDays >= 1 && diffDays <= 3) {
+      return { libur, diffDays };
+    }
   }
-  return false;
+  return null;
+}
+
+/** True kalau ISO di-range 1-3 hari kalender sebelum salah satu tanggal merah. */
+export function isPreLiburPanjang(
+  iso: string,
+  liburList: ReadonlyArray<string> = LIBUR_NASIONAL_2025,
+): boolean {
+  return findPreLiburTarget(iso, liburList) !== null;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Rule definitions.
+// Helper: ambil tgl_sp2d string dari SP2DRow (defensive).
 // ──────────────────────────────────────────────────────────────────────────────
 
-export const timing_year_end_spike: RiskRule = {
+function getTglSp2d(row: SP2DRow): string {
+  const r = row as unknown as Record<string, unknown>;
+  const v = r.tgl_sp2d;
+  return typeof v === "string" ? v : "";
+}
+
+function getIdx(row: SP2DRow, fallback: number): number {
+  const r = row as unknown as Record<string, unknown>;
+  const v = r._idx;
+  return typeof v === "number" ? v : fallback;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Rule definitions — Foundation API (run(ctx) => RuleHit[]).
+// ──────────────────────────────────────────────────────────────────────────────
+
+export const timing_year_end_spike: Rule = {
   id: "timing_year_end_spike",
   category: "timing",
   severity: "medium",
@@ -204,10 +201,29 @@ export const timing_year_end_spike: RiskRule = {
     "SP2D dicairkan di bulan Desember. Volume tinggi akhir tahun di pemda memang " +
     "umum karena kejar serapan, tapi tetap perlu audit attention untuk cek " +
     "backdating, mark-up volume pekerjaan, atau pekerjaan fisik belum 100% selesai.",
-  filter: (row) => isDecember(row.tgl_sp2d),
+  run: (ctx: RuleContext): RuleHit[] => {
+    const hits: RuleHit[] = [];
+    for (let i = 0; i < ctx.populasi.length; i++) {
+      const row = ctx.populasi[i];
+      const tgl = getTglSp2d(row);
+      if (!isDecember(tgl)) continue;
+      const parts = parseISODate(tgl);
+      hits.push({
+        sp2dIdx: getIdx(row, i),
+        reason: `SP2D dicairkan ${tgl} (Desember — akhir tahun anggaran).`,
+        severity: "medium",
+        ref: {
+          tgl_sp2d: tgl,
+          bulan: parts?.m ?? null,
+          tahun: parts?.y ?? null,
+        },
+      });
+    }
+    return hits;
+  },
 };
 
-export const timing_year_end_critical: RiskRule = {
+export const timing_year_end_critical: Rule = {
   id: "timing_year_end_critical",
   category: "timing",
   severity: "high",
@@ -217,10 +233,30 @@ export const timing_year_end_critical: RiskRule = {
     "SP2D dicairkan di minggu terakhir Desember (25-31 Des). Window paling rawan " +
     "backdate dokumen pertanggungjawaban dan ngebut serapan saat kantor sebagian " +
     "sudah tutup libur Natal. Cross-check dengan BAST dan progres fisik.",
-  filter: (row) => isYearEndCritical(row.tgl_sp2d),
+  run: (ctx: RuleContext): RuleHit[] => {
+    const hits: RuleHit[] = [];
+    for (let i = 0; i < ctx.populasi.length; i++) {
+      const row = ctx.populasi[i];
+      const tgl = getTglSp2d(row);
+      if (!isYearEndCritical(tgl)) continue;
+      const parts = parseISODate(tgl);
+      hits.push({
+        sp2dIdx: getIdx(row, i),
+        reason: `SP2D dicairkan ${tgl} (25-31 Des — window kritikal akhir tahun).`,
+        severity: "high",
+        ref: {
+          tgl_sp2d: tgl,
+          tanggal: parts?.d ?? null,
+          bulan: parts?.m ?? null,
+          tahun: parts?.y ?? null,
+        },
+      });
+    }
+    return hits;
+  },
 };
 
-export const timing_weekend_holiday: RiskRule = {
+export const timing_weekend_holiday: Rule = {
   id: "timing_weekend_holiday",
   category: "timing",
   severity: "medium",
@@ -231,14 +267,31 @@ export const timing_weekend_holiday: RiskRule = {
     "positive: SP2D LS gaji / tunjangan rutin yang cut-off-nya jatuh weekend itu " +
     "normal (sistem generate by date). Rule mengecualikan SP2D yang teridentifikasi " +
     "sebagai gaji / tunjangan / tukin / TPP via jenis_spm atau uraian.",
-  filter: (row) => {
-    if (!isWeekend(row.tgl_sp2d)) return false;
-    if (isRutinGajiTunjangan(row)) return false;
-    return true;
+  run: (ctx: RuleContext): RuleHit[] => {
+    const hits: RuleHit[] = [];
+    for (let i = 0; i < ctx.populasi.length; i++) {
+      const row = ctx.populasi[i];
+      const tgl = getTglSp2d(row);
+      if (!isWeekend(tgl)) continue;
+      if (isRutinGajiTunjangan(row)) continue;
+      const dow = dayOfWeek(tgl);
+      const hari = dow === 0 ? "Minggu" : "Sabtu";
+      hits.push({
+        sp2dIdx: getIdx(row, i),
+        reason: `SP2D dicairkan hari ${hari} (${tgl}) — bukan LS gaji/tunjangan rutin.`,
+        severity: "medium",
+        ref: {
+          tgl_sp2d: tgl,
+          day_of_week: dow,
+          hari,
+        },
+      });
+    }
+    return hits;
   },
 };
 
-export const timing_before_dpa: RiskRule = {
+export const timing_before_dpa: Rule = {
   id: "timing_before_dpa",
   category: "timing",
   severity: "high",
@@ -249,11 +302,13 @@ export const timing_before_dpa: RiskRule = {
     "kuat backdate atau pencairan tanpa dasar anggaran sah. Default OFF: butuh data " +
     "tanggal DPA per kegiatan yang belum tersedia di canonical SP2DRow. Aktifkan " +
     "setelah enrichment DPA selesai.",
-  // Placeholder: tanpa data DPA, predicate selalu false (engine skip clean).
-  filter: () => false,
+  // Placeholder: tanpa data DPA, hits selalu kosong (engine skip clean).
+  run: (_ctx: RuleContext): RuleHit[] => {
+    return [];
+  },
 };
 
-export const timing_pre_libur_panjang: RiskRule = {
+export const timing_pre_libur_panjang: Rule = {
   id: "timing_pre_libur_panjang",
   category: "timing",
   severity: "low",
@@ -264,11 +319,30 @@ export const timing_pre_libur_panjang: RiskRule = {
     "tahun baru / hari besar). Pola burst pre-libur kadang dipakai supaya dana cair " +
     "dulu sebelum kantor tutup. Severity rendah karena banyak yang legit (mis. " +
     "THR, gaji-13, pembayaran rutin sebelum cuti bersama).",
-  filter: (row) => isPreLiburPanjang(row.tgl_sp2d),
+  run: (ctx: RuleContext): RuleHit[] => {
+    const hits: RuleHit[] = [];
+    for (let i = 0; i < ctx.populasi.length; i++) {
+      const row = ctx.populasi[i];
+      const tgl = getTglSp2d(row);
+      const target = findPreLiburTarget(tgl);
+      if (!target) continue;
+      hits.push({
+        sp2dIdx: getIdx(row, i),
+        reason: `SP2D ${tgl} dicairkan ${target.diffDays} hari sebelum libur nasional ${target.libur}.`,
+        severity: "low",
+        ref: {
+          tgl_sp2d: tgl,
+          libur_target: target.libur,
+          diff_days: target.diffDays,
+        },
+      });
+    }
+    return hits;
+  },
 };
 
 /** Semua rule timing — di-export sebagai array buat di-merge engine pusat. */
-export const TIMING_RULES: ReadonlyArray<RiskRule> = [
+export const TIMING_RULES: Rule[] = [
   timing_year_end_spike,
   timing_year_end_critical,
   timing_weekend_holiday,

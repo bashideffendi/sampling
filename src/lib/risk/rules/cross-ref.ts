@@ -1,5 +1,5 @@
 /**
- * Cross-reference risk rules untuk Cap Cip Cup v0.3.2 (Risk Helper).
+ * Cross-reference risk rules untuk Cap Cip Cup (Risk Helper).
  *
  * Kategori: 'cross_ref' — rule yang butuh ngebandingin antar-baris populasi
  * (bukan single-row check). Contoh: duplicate payment, identical amount,
@@ -14,78 +14,27 @@
  * - Vendor classification BUKAN by nama (CV/PT prefix) tapi by kode_rek.
  *   Untuk cross-ref vendor, kita pakai field `penyedia` apa adanya — rule ini
  *   ngecek pola perilaku (repeat across OPD), bukan ngklasifikasi vendor.
+ * - NPWP: terima 15 digit (badan format lama) ATAU 16 digit (NIK WP OP,
+ *   PMK-112/PMK.03/2022).
+ *
+ * API: Foundation Rule (lihat ../types.ts) — run(ctx): RuleHit[].
+ * Untuk enrichment data (pagu, master vendor), gunakan ctx.allRows atau
+ * inject via populasi pre-processor — saat ini rule yang butuh enrichment
+ * tetap defaultOff dan return [] kalau data gak ada.
  */
 
 import type { SP2DRow } from "@/types";
-
-// ---------------------------------------------------------------------------
-// Public types
-// ---------------------------------------------------------------------------
-
-export type RiskCategory =
-  | "cross_ref"
-  | "vendor"
-  | "benford"
-  | "timing"
-  | "round_number"
-  | "threshold"
-  | "npwp"
-  | "split_paket";
-
-export type RiskSeverity = "low" | "medium" | "high";
-
-/**
- * Konteks tambahan buat rule yang butuh data enrichment.
- * Semua optional — rule yang butuh data tertentu wajib guard kalau gak ada.
- */
-export interface RiskContext {
-  /** Master vendor (NPWP set). Kalau gak ada, vendor_not_in_master skip. */
-  masterVendorNPWP?: Set<string>;
-  /** Map pagu per (skpd, kode_rek) → nilai pagu Rp. */
-  paguMap?: Map<string, number>;
-  /** Override window hari buat duplicate_payment (default 30). */
-  duplicateWindowDays?: number;
-  /** Override min instance buat identical_amount (default 3). */
-  identicalAmountMinInstance?: number;
-  /** Override min nilai buat identical_amount (default Rp 10jt). */
-  identicalAmountMinNilai?: number;
-  /** Override gap threshold buat gap_nomor_sp2d (default >5 = suspect). */
-  gapNomorThreshold?: number;
-}
-
-/** Output 1 hit (1 baris populasi yang flagged oleh 1 rule). */
-export interface RuleHit {
-  ruleId: string;
-  category: RiskCategory;
-  severity: RiskSeverity;
-  rowIdx: number;
-  no_sp2d: string;
-  /** Pesan singkat manusiawi (Indonesia). */
-  reason: string;
-  /** Data tambahan buat UI (cluster size, peer rows, dll). */
-  evidence?: Record<string, unknown>;
-}
-
-export interface RiskRule {
-  id: string;
-  category: RiskCategory;
-  severity: RiskSeverity;
-  defaultOn: boolean;
-  /** Judul tampil di UI. */
-  title: string;
-  /** Deskripsi panjang buat tooltip / docs. */
-  description: string;
-  /** Sitasi opsional (Perpres / PMK / SPI). Jangan ngarang. */
-  citation?: string;
-  /** Predicate utama: jalanin rule, return hits. */
-  run: (rows: SP2DRow[], ctx: RiskContext) => RuleHit[];
-}
+import type { Rule, RuleHit, RuleContext, Severity } from "../types";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 const MS_PER_DAY = 86_400_000;
+const DEFAULT_WINDOW_DAYS = 30;
+const DEFAULT_IDENTICAL_MIN_INSTANCE = 3;
+const DEFAULT_IDENTICAL_MIN_NILAI = 10_000_000;
+const DEFAULT_GAP_THRESHOLD = 5;
 
 function parseISO(d: string | undefined): number | null {
   if (!d) return null;
@@ -130,7 +79,10 @@ export function extractSP2DSeq(noSP2D: string): number | null {
 }
 
 /** Group SP2D ke cluster by composite key. */
-function groupBy<K>(rows: SP2DRow[], keyFn: (r: SP2DRow) => K | null): Map<K, SP2DRow[]> {
+function groupBy<K>(
+  rows: SP2DRow[],
+  keyFn: (r: SP2DRow) => K | null
+): Map<K, SP2DRow[]> {
   const m = new Map<K, SP2DRow[]>();
   for (const r of rows) {
     const k = keyFn(r);
@@ -146,16 +98,17 @@ function groupBy<K>(rows: SP2DRow[], keyFn: (r: SP2DRow) => K | null): Map<K, SP
 // Rule 1: duplicate_payment
 // ---------------------------------------------------------------------------
 
-const duplicatePayment: RiskRule = {
+export const duplicatePayment: Rule = {
   id: "duplicate_payment",
   category: "cross_ref",
   severity: "high",
   defaultOn: true,
-  title: "Indikasi Duplikasi Pembayaran",
+  label: "Indikasi Duplikasi Pembayaran",
   description:
     "Dua atau lebih SP2D dengan vendor, nilai (bucket Rp 1 juta), dan uraian (30 karakter pertama) yang sama dalam jendela 30 hari. Indikasi pembayaran ganda atas kewajiban yang sama.",
-  run(rows, ctx) {
-    const windowDays = ctx.duplicateWindowDays ?? 30;
+  run(ctx: RuleContext): RuleHit[] {
+    const rows = ctx.populasi;
+    const windowDays = DEFAULT_WINDOW_DAYS;
     const clusters = groupBy(rows, (r) => {
       const vendor = normalizeText(r.penyedia);
       const uraian = normalizeText(r.uraian).slice(0, 30);
@@ -164,6 +117,7 @@ const duplicatePayment: RiskRule = {
       return `${vendor}|${bucket}|${uraian}`;
     });
 
+    const severity: Severity = "high";
     const hits: RuleHit[] = [];
     for (const [, group] of clusters) {
       if (group.length < 2) continue;
@@ -188,13 +142,15 @@ const duplicatePayment: RiskRule = {
           .filter((p) => p._idx !== r._idx && inWindow.has(p._idx))
           .map((p) => p.no_sp2d);
         hits.push({
-          ruleId: "duplicate_payment",
-          category: "cross_ref",
-          severity: "high",
-          rowIdx: r._idx,
-          no_sp2d: r.no_sp2d,
+          sp2dIdx: r._idx,
+          severity,
           reason: `Vendor & nilai & uraian serupa dengan ${peers.length} SP2D lain dalam ${windowDays} hari`,
-          evidence: { peers, vendor: r.penyedia, nilai: r.nilai },
+          ref: {
+            peers,
+            vendor: r.penyedia,
+            nilai: r.nilai,
+            windowDays,
+          },
         });
       }
     }
@@ -206,35 +162,34 @@ const duplicatePayment: RiskRule = {
 // Rule 2: identical_amount
 // ---------------------------------------------------------------------------
 
-const identicalAmount: RiskRule = {
+export const identicalAmount: Rule = {
   id: "identical_amount",
   category: "cross_ref",
   severity: "medium",
   defaultOn: true,
-  title: "Nilai SP2D Identik Berulang",
+  label: "Nilai SP2D Identik Berulang",
   description:
     "Tiga atau lebih SP2D memiliki nilai persis sama (di atas Rp 10 juta). Potensi double-claim atau template pembayaran yang perlu diuji substansi.",
-  run(rows, ctx) {
-    const minInstance = ctx.identicalAmountMinInstance ?? 3;
-    const minNilai = ctx.identicalAmountMinNilai ?? 10_000_000;
+  run(ctx: RuleContext): RuleHit[] {
+    const rows = ctx.populasi;
+    const minInstance = DEFAULT_IDENTICAL_MIN_INSTANCE;
+    const minNilai = DEFAULT_IDENTICAL_MIN_NILAI;
 
     const byNilai = groupBy(rows, (r) =>
       r.nilai > minNilai ? r.nilai : null
     );
 
+    const severity: Severity = "medium";
     const hits: RuleHit[] = [];
     for (const [nilai, group] of byNilai) {
       if (group.length < minInstance) continue;
       const peers = group.map((g) => g.no_sp2d);
       for (const r of group) {
         hits.push({
-          ruleId: "identical_amount",
-          category: "cross_ref",
-          severity: "medium",
-          rowIdx: r._idx,
-          no_sp2d: r.no_sp2d,
+          sp2dIdx: r._idx,
+          severity,
           reason: `Nilai persis sama dengan ${group.length - 1} SP2D lain (Rp ${nilai.toLocaleString("id-ID")})`,
-          evidence: {
+          ref: {
             nilai,
             count: group.length,
             peers: peers.filter((p) => p !== r.no_sp2d),
@@ -250,20 +205,23 @@ const identicalAmount: RiskRule = {
 // Rule 3: gap_nomor_sp2d
 // ---------------------------------------------------------------------------
 
-const gapNomorSP2D: RiskRule = {
+export const gapNomorSP2D: Rule = {
   id: "gap_nomor_sp2d",
   category: "cross_ref",
   severity: "medium",
-  defaultOn: false, // butuh format-aware parsing yang stabil per SKPD
-  title: "Gap Nomor SP2D (Skip Numbering)",
+  defaultOn: false,
+  defaultOff: true, // butuh format-aware parsing yang stabil per SKPD
+  label: "Gap Nomor SP2D (Skip Numbering)",
   description:
     "Terdapat lompatan sekuens nomor SP2D dalam satu SKPD yang lebih besar dari ambang. Indikasi penghapusan / pembatalan / manipulasi register SP2D yang perlu dikonfirmasi ke BUD.",
-  run(rows, ctx) {
-    const gapThreshold = ctx.gapNomorThreshold ?? 5;
+  run(ctx: RuleContext): RuleHit[] {
+    const rows = ctx.populasi;
+    const gapThreshold = DEFAULT_GAP_THRESHOLD;
 
     // Group per SKPD, ekstrak sequence number, sort, deteksi gap.
     const bySKPD = groupBy(rows, (r) => normalizeText(r.skpd) || null);
 
+    const severity: Severity = "medium";
     const hits: RuleHit[] = [];
     for (const [, group] of bySKPD) {
       // Map row -> seq
@@ -280,13 +238,10 @@ const gapNomorSP2D: RiskRule = {
         const gap = cur.seq - prev.seq;
         if (gap > gapThreshold) {
           hits.push({
-            ruleId: "gap_nomor_sp2d",
-            category: "cross_ref",
-            severity: "medium",
-            rowIdx: cur.r._idx,
-            no_sp2d: cur.r.no_sp2d,
+            sp2dIdx: cur.r._idx,
+            severity,
             reason: `Gap ${gap} nomor dari SP2D sebelumnya (${prev.r.no_sp2d}) di SKPD yang sama`,
-            evidence: {
+            ref: {
               skpd: cur.r.skpd,
               prevSeq: prev.seq,
               curSeq: cur.seq,
@@ -305,52 +260,20 @@ const gapNomorSP2D: RiskRule = {
 // Rule 4: nilai_exceed_pagu (defaultOff — butuh data pagu)
 // ---------------------------------------------------------------------------
 
-const nilaiExceedPagu: RiskRule = {
+export const nilaiExceedPagu: Rule = {
   id: "nilai_exceed_pagu",
   category: "cross_ref",
   severity: "high",
-  defaultOn: false, // butuh enrichment data pagu per (SKPD, kode_rek)
-  title: "Realisasi Melebihi Pagu",
+  defaultOn: false,
+  defaultOff: true, // butuh enrichment data pagu per (SKPD, kode_rek)
+  label: "Realisasi Melebihi Pagu",
   description:
-    "Akumulasi realisasi SP2D pada satu kombinasi SKPD + kode rekening melebihi nilai pagu DPA. Wajib dikonfirmasi dengan dokumen DPA / DPPA terakhir. Rule hanya aktif jika data pagu di-upload.",
-  run(rows, ctx) {
-    if (!ctx.paguMap || ctx.paguMap.size === 0) return [];
-
-    // Akumulasi realisasi per (skpd, kode_rek)
-    const realisasi = new Map<string, { total: number; rowIdxs: number[] }>();
-    for (const r of rows) {
-      const skpd = normalizeText(r.skpd);
-      const kr = normalizeText(r.kode_rek);
-      if (!skpd || !kr) continue;
-      const key = `${skpd}|${kr}`;
-      const cur = realisasi.get(key) ?? { total: 0, rowIdxs: [] };
-      cur.total += r.nilai;
-      cur.rowIdxs.push(r._idx);
-      realisasi.set(key, cur);
-    }
-
-    const hits: RuleHit[] = [];
-    for (const [key, { total, rowIdxs }] of realisasi) {
-      const pagu = ctx.paguMap.get(key);
-      if (pagu === undefined || pagu <= 0) continue;
-      if (total <= pagu) continue;
-      // Flag SEMUA row di (skpd, kode_rek) yang exceed.
-      const exceed = total - pagu;
-      for (const idx of rowIdxs) {
-        const row = rows.find((r) => r._idx === idx);
-        if (!row) continue;
-        hits.push({
-          ruleId: "nilai_exceed_pagu",
-          category: "cross_ref",
-          severity: "high",
-          rowIdx: idx,
-          no_sp2d: row.no_sp2d,
-          reason: `Akumulasi realisasi (Rp ${total.toLocaleString("id-ID")}) melebihi pagu (Rp ${pagu.toLocaleString("id-ID")}) sebesar Rp ${exceed.toLocaleString("id-ID")}`,
-          evidence: { skpd: row.skpd, kode_rek: row.kode_rek, total, pagu, exceed },
-        });
-      }
-    }
-    return hits;
+    "Akumulasi realisasi SP2D pada satu kombinasi SKPD + kode rekening melebihi nilai pagu DPA. Wajib dikonfirmasi dengan dokumen DPA / DPPA terakhir. Rule hanya aktif jika data pagu di-upload (placeholder — data pagu belum ter-wire ke RuleContext).",
+  run(_ctx: RuleContext): RuleHit[] {
+    // PLACEHOLDER — data pagu belum ter-wire ke RuleContext Foundation.
+    // Saat enrichment pagu ditambahin ke ctx (mis. lewat meta atau side-channel),
+    // re-aktifkan logic akumulasi per (skpd|kode_rek) → bandingin sama pagu.
+    return [];
   },
 };
 
@@ -358,35 +281,21 @@ const nilaiExceedPagu: RiskRule = {
 // Rule 5: vendor_not_in_master (defaultOff — butuh master vendor)
 // ---------------------------------------------------------------------------
 
-const vendorNotInMaster: RiskRule = {
+export const vendorNotInMaster: Rule = {
   id: "vendor_not_in_master",
   category: "cross_ref",
   severity: "medium",
-  defaultOn: false, // butuh enrichment master vendor NPWP
-  title: "Vendor Tidak Terdaftar di Master",
+  defaultOn: false,
+  defaultOff: true, // butuh enrichment master vendor NPWP
+  label: "Vendor Tidak Terdaftar di Master",
   description:
-    "NPWP penyedia pada SP2D tidak ditemukan pada master vendor (LPSE / e-Katalog / SIKaP). Indikasi vendor fiktif atau bypass proses pengadaan. Rule hanya aktif jika master vendor di-upload.",
-  run(rows, ctx) {
-    if (!ctx.masterVendorNPWP || ctx.masterVendorNPWP.size === 0) return [];
-
-    const hits: RuleHit[] = [];
-    for (const r of rows) {
-      const npwp = (r.npwp ?? "").replace(/[^0-9]/g, "");
-      if (!npwp) continue;
-      // Terima 15 digit (badan format lama) atau 16 digit (NIK WP OP, PMK-112/2022).
-      if (npwp.length !== 15 && npwp.length !== 16) continue;
-      if (ctx.masterVendorNPWP.has(npwp)) continue;
-      hits.push({
-        ruleId: "vendor_not_in_master",
-        category: "cross_ref",
-        severity: "medium",
-        rowIdx: r._idx,
-        no_sp2d: r.no_sp2d,
-        reason: `NPWP ${npwp} (vendor ${r.penyedia ?? "-"}) tidak ditemukan di master vendor`,
-        evidence: { npwp, vendor: r.penyedia },
-      });
-    }
-    return hits;
+    "NPWP penyedia pada SP2D tidak ditemukan pada master vendor (LPSE / e-Katalog / SIKaP). Indikasi vendor fiktif atau bypass proses pengadaan. Rule hanya aktif jika master vendor di-upload (placeholder — master vendor belum ter-wire ke RuleContext). NPWP valid: 15 atau 16 digit (PMK-112/2022).",
+  run(_ctx: RuleContext): RuleHit[] {
+    // PLACEHOLDER — master vendor NPWP belum ter-wire ke RuleContext Foundation.
+    // Saat enrichment master vendor ditambahin ke ctx, re-aktifkan logic:
+    //   - Loop rows, ambil npwp (digit-only), filter length 15 ATAU 16.
+    //   - Cek apakah ada di Set master; kalau gak ada → hit.
+    return [];
   },
 };
 
@@ -394,16 +303,17 @@ const vendorNotInMaster: RiskRule = {
 // Rule 6: cross_vendor_same_uraian_diff_opd (extra)
 // ---------------------------------------------------------------------------
 
-const crossVendorSameUraianDiffOPD: RiskRule = {
+export const crossVendorSameUraianDiffOPD: Rule = {
   id: "cross_vendor_same_uraian_diff_opd",
   category: "cross_ref",
   severity: "medium",
   defaultOn: true,
-  title: "Vendor Ngepung Multi-OPD",
+  label: "Vendor Ngepung Multi-OPD",
   description:
     "Satu vendor menerima pembayaran dengan uraian serupa dari dua atau lebih OPD berbeda dalam 30 hari. Indikasi vendor dominan / pengaturan tender lintas OPD yang perlu uji konsentrasi.",
-  run(rows, ctx) {
-    const windowDays = ctx.duplicateWindowDays ?? 30;
+  run(ctx: RuleContext): RuleHit[] {
+    const rows = ctx.populasi;
+    const windowDays = DEFAULT_WINDOW_DAYS;
 
     // Group by (vendor, uraian-prefix)
     const clusters = groupBy(rows, (r) => {
@@ -413,10 +323,13 @@ const crossVendorSameUraianDiffOPD: RiskRule = {
       return `${vendor}|${uraian}`;
     });
 
+    const severity: Severity = "medium";
     const hits: RuleHit[] = [];
     for (const [, group] of clusters) {
       // Hitung distinct OPD
-      const opdSet = new Set(group.map((r) => normalizeText(r.skpd)).filter(Boolean));
+      const opdSet = new Set(
+        group.map((r) => normalizeText(r.skpd)).filter(Boolean)
+      );
       if (opdSet.size < 2) continue;
 
       // Cek minimal ada 2 row dari OPD beda dalam window.
@@ -439,16 +352,14 @@ const crossVendorSameUraianDiffOPD: RiskRule = {
       for (const r of sorted) {
         if (!flagged.has(r._idx)) continue;
         hits.push({
-          ruleId: "cross_vendor_same_uraian_diff_opd",
-          category: "cross_ref",
-          severity: "medium",
-          rowIdx: r._idx,
-          no_sp2d: r.no_sp2d,
+          sp2dIdx: r._idx,
+          severity,
           reason: `Vendor ${r.penyedia ?? "-"} menerima pembayaran serupa dari ${opdSet.size} OPD berbeda dalam ${windowDays} hari`,
-          evidence: {
+          ref: {
             vendor: r.penyedia,
             opdCount: opdSet.size,
             opds: Array.from(opdSet),
+            windowDays,
           },
         });
       }
@@ -461,15 +372,17 @@ const crossVendorSameUraianDiffOPD: RiskRule = {
 // Rule 7: cross_uraian_same_vendor_diff_opd (extra — templat copy-paste)
 // ---------------------------------------------------------------------------
 
-const crossUraianSameVendorDiffOPD: RiskRule = {
+export const crossUraianSameVendorDiffOPD: Rule = {
   id: "cross_uraian_same_vendor_diff_opd",
   category: "cross_ref",
   severity: "low",
   defaultOn: true,
-  title: "Templat Uraian Identik Lintas OPD",
+  label: "Templat Uraian Identik Lintas OPD",
   description:
     "Uraian SP2D persis sama muncul di dua atau lebih OPD berbeda (vendor boleh beda). Indikasi copy-paste templat administrasi yang patut diuji substansi pengadaannya.",
-  run(rows) {
+  run(ctx: RuleContext): RuleHit[] {
+    const rows = ctx.populasi;
+
     // Group by uraian persis (bukan prefix — harus exact biar low severity)
     const clusters = groupBy(rows, (r) => {
       const uraian = normalizeText(r.uraian);
@@ -477,19 +390,19 @@ const crossUraianSameVendorDiffOPD: RiskRule = {
       return uraian;
     });
 
+    const severity: Severity = "low";
     const hits: RuleHit[] = [];
     for (const [uraian, group] of clusters) {
-      const opdSet = new Set(group.map((r) => normalizeText(r.skpd)).filter(Boolean));
+      const opdSet = new Set(
+        group.map((r) => normalizeText(r.skpd)).filter(Boolean)
+      );
       if (opdSet.size < 2) continue;
       for (const r of group) {
         hits.push({
-          ruleId: "cross_uraian_same_vendor_diff_opd",
-          category: "cross_ref",
-          severity: "low",
-          rowIdx: r._idx,
-          no_sp2d: r.no_sp2d,
+          sp2dIdx: r._idx,
+          severity,
           reason: `Uraian identik muncul di ${opdSet.size} OPD berbeda`,
-          evidence: {
+          ref: {
             uraian,
             opdCount: opdSet.size,
             opds: Array.from(opdSet),
@@ -506,7 +419,7 @@ const crossUraianSameVendorDiffOPD: RiskRule = {
 // ---------------------------------------------------------------------------
 
 /** Semua rule cross-ref, dalam urutan tampil di UI. */
-export const CROSS_REF_RULES: RiskRule[] = [
+export const CROSS_REF_RULES: Rule[] = [
   duplicatePayment,
   identicalAmount,
   gapNomorSP2D,
@@ -515,14 +428,3 @@ export const CROSS_REF_RULES: RiskRule[] = [
   crossVendorSameUraianDiffOPD,
   crossUraianSameVendorDiffOPD,
 ];
-
-/** Named export biar bisa di-import individual untuk test / orchestration. */
-export {
-  duplicatePayment,
-  identicalAmount,
-  gapNomorSP2D,
-  nilaiExceedPagu,
-  vendorNotInMaster,
-  crossVendorSameUraianDiffOPD,
-  crossUraianSameVendorDiffOPD,
-};

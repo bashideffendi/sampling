@@ -1,24 +1,39 @@
 /**
- * Risk Helper v0.3.2 — Statistical rules.
+ * Risk Helper v0.3.3 — Statistical rules (ported to Foundation API).
  *
- * Rule statistik bersifat indikasi (low/medium severity). Auditor tetap wajib substantif:
+ * Rule statistik bersifat indikasi (low/medium/high severity). Auditor tetap wajib substantif:
  *  - Benford = test goodness-of-fit, bukan bukti fraud (Nigrini 2012).
- *  - IQR/Z-score = nominal outlier, bisa wajar (proyek strategis) atau anomali.
- *  - Konsentrasi vendor = perlu cross-check dengan kontrak.
+ *  - IQR/Tukey fence = nominal outlier, bisa wajar (proyek strategis) atau anomali.
+ *  - Konsentrasi vendor (Gini) = perlu cross-check dengan kontrak.
  *
- * Pre-koreksi adversarial verify v0.3.2:
+ * Adversarial-verify (lihat memory project_capcipcup.md):
  *  - Benford defaultOff, butuh n>=1000 global / n>=500 per-akun (chi-square stabil).
- *  - Exclude akun 51xx (pegawai/gaji), 52xx hub 5104 (honor), 56xx (hibah),
- *    57xx (bansos), 5125 (perjadin) — nilainya seragam/lumpsum SBM, bukan natural.
- *  - Round-number defaultOn medium tapi otomatis exclude akun di atas.
+ *  - Exclude akun 51xx (pegawai/gaji), 5102/5104 (honor), 56xx (hibah),
+ *    57xx (bansos), 5125/5121xx (perjadin) — nilainya seragam/lumpsum SBM, bukan natural.
+ *  - Round-number defaultOn low tapi otomatis exclude akun di atas.
+ *  - Gini concentration distinct dari vendor_concentration_dominant (yang pakai
+ *    share > 50% per OPD×akun). Ini ngukur distribusi Gini per OPD (≥5 vendor).
+ *
+ * Foundation API:
+ *  - run(ctx): RuleHit[]   (bukan evaluate)
+ *  - RuleHit = { sp2dIdx, reason, severity, ref?: object }
+ *  - ref TYPED OBJECT, BUKAN string
  */
 
 import type { SP2DRow } from "@/types";
-import { akun4Prefix, type Rule, type RuleContext, type RuleHit } from "../types";
+import type { Rule, RuleContext, RuleHit } from "../types";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers (exported buat test + reuse rule lain)
 // ──────────────────────────────────────────────────────────────────────────────
+
+/** Ambil prefix akun 4-digit numerik (gabungkan separator). "5.1.02.01" → "5102". */
+export function akun4Prefix(kodeRek: string | undefined | null): string {
+  if (!kodeRek) return "__UNKNOWN__";
+  const digits = String(kodeRek).replace(/[^0-9]/g, "");
+  if (digits.length < 4) return "__UNKNOWN__";
+  return digits.slice(0, 4);
+}
 
 /** First significant digit (1-9). Return 0 kalau invalid / nol / negatif kecil. */
 export function firstDigit(n: number): number {
@@ -67,10 +82,10 @@ export function benfordChiSquare(values: readonly number[]): BenfordResult {
   const observedRatio = new Array<number>(10).fill(0);
   if (total > 0) {
     for (let d = 1; d <= 9; d++) {
-      const exp = BENFORD_EXPECTED[d] * total;
-      observedRatio[d] = counts[d] / total;
+      const exp = BENFORD_EXPECTED[d]! * total;
+      observedRatio[d] = counts[d]! / total;
       if (exp > 0) {
-        const diff = counts[d] - exp;
+        const diff = counts[d]! - exp;
         chi += (diff * diff) / exp;
       }
     }
@@ -83,42 +98,28 @@ export const BENFORD_CHI_CRITICAL_05 = 15.507;
 
 /**
  * Akun yang di-EXCLUDE dari Benford / round-number test:
- *  51xx pegawai+gaji, 5104 honor, 56xx hibah, 57xx bansos, 5125 perjadin.
- * Cek pakai prefix; juga handle 4-digit langsung kalau passed sebagai akun4.
+ *  51xx pegawai+gaji, 5102/5104 honor, 56xx hibah, 57xx bansos, 5125/5121xx perjadin.
  */
 export function isAkunBenfordExcluded(akun4: string): boolean {
   if (!akun4 || akun4 === "__UNKNOWN__") return false;
-  // Belanja Pegawai (51xx) — gaji/tunjangan seragam.
-  if (akun4.startsWith("51")) return true;
-  // Honor (commonly 5102/5104 di berbagai bagan akun) — jaga-jaga dua-duanya.
-  if (akun4 === "5102" || akun4 === "5104") return true;
-  // Perjalanan Dinas (lumpsum SBM).
-  if (akun4 === "5125" || akun4.startsWith("5121")) return true;
-  // Belanja Hibah (56xx).
-  if (akun4.startsWith("56")) return true;
-  // Belanja Bantuan Sosial (57xx).
-  if (akun4.startsWith("57")) return true;
+  if (akun4.startsWith("51")) return true; // Belanja Pegawai
+  if (akun4 === "5102" || akun4 === "5104") return true; // Honor
+  if (akun4 === "5125" || akun4.startsWith("5121")) return true; // Perjadin
+  if (akun4.startsWith("56")) return true; // Hibah
+  if (akun4.startsWith("57")) return true; // Bansos
   return false;
-}
-
-/** Median dari array number. Mutasi internal aja (kopi dulu). */
-export function median(values: readonly number[]): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = sorted.length >> 1;
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
 /** Quantile via linear interpolation (sample sudah harus sorted asc). */
 export function quantileSorted(sorted: readonly number[], q: number): number {
   if (sorted.length === 0) return 0;
-  if (sorted.length === 1) return sorted[0];
+  if (sorted.length === 1) return sorted[0]!;
   const pos = q * (sorted.length - 1);
   const lo = Math.floor(pos);
   const hi = Math.ceil(pos);
-  if (lo === hi) return sorted[lo];
+  if (lo === hi) return sorted[lo]!;
   const frac = pos - lo;
-  return sorted[lo] * (1 - frac) + sorted[hi] * frac;
+  return sorted[lo]! * (1 - frac) + sorted[hi]! * frac;
 }
 
 export interface IqrSummary {
@@ -147,9 +148,8 @@ export function iqrSummary(values: readonly number[]): IqrSummary {
 }
 
 /**
- * Gini coefficient dari array share/value non-negatif.
+ * Gini coefficient (Brown formula) dari array share/value non-negatif.
  * 0 = perfect equality, mendekati 1 = konsentrasi ekstrem.
- * Rumus: G = (sum_i sum_j |x_i - x_j|) / (2 n sum_i x_i).
  */
 export function giniCoefficient(values: readonly number[]): number {
   if (values.length === 0) return 0;
@@ -158,12 +158,11 @@ export function giniCoefficient(values: readonly number[]): number {
   let sum = 0;
   let weightedSum = 0;
   for (let i = 0; i < n; i++) {
-    const v = Math.max(0, sorted[i]);
+    const v = Math.max(0, sorted[i]!);
     sum += v;
     weightedSum += (i + 1) * v;
   }
   if (sum <= 0) return 0;
-  // Brown formula: G = (2 * sum_{i=1..n} i*x_i) / (n * sum_x) - (n+1)/n.
   return (2 * weightedSum) / (n * sum) - (n + 1) / n;
 }
 
@@ -174,15 +173,48 @@ export function isRoundMillion(n: number): boolean {
 }
 
 function vendorKey(row: SP2DRow): string {
-  const npwp = row.npwp?.replace(/\D/g, "") ?? "";
-  if (npwp.length >= 15) return `NPWP:${npwp}`;
+  const npwp = (row.npwp ?? "").replace(/\D/g, "");
+  if (npwp.length === 15 || npwp.length === 16) return `NPWP:${npwp}`;
   const name = (row.penyedia ?? "").trim().toUpperCase();
   return name ? `NAME:${name}` : "";
+}
+
+function formatRp(n: number): string {
+  return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(Math.round(n));
+}
+
+/** Group rows by akun4 prefix. */
+function groupByAkun4(rows: SP2DRow[]): Map<string, SP2DRow[]> {
+  const m = new Map<string, SP2DRow[]>();
+  for (const r of rows) {
+    const k = akun4Prefix(r.kode_rek);
+    const arr = m.get(k);
+    if (arr) arr.push(r);
+    else m.set(k, [r]);
+  }
+  return m;
+}
+
+/** Group rows by SKPD (OPD). */
+function groupBySkpd(rows: SP2DRow[]): Map<string, SP2DRow[]> {
+  const m = new Map<string, SP2DRow[]>();
+  for (const r of rows) {
+    const k = (r.skpd ?? "").trim() || "__UNKNOWN__";
+    const arr = m.get(k);
+    if (arr) arr.push(r);
+    else m.set(k, [r]);
+  }
+  return m;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Rule 1 — Benford global
 // ──────────────────────────────────────────────────────────────────────────────
+//
+// Global Benford test bukan per-row signal. Karena Foundation RuleHit wajib
+// punya sp2dIdx, kita attach synthetic hit ke row PERTAMA dari eligible set
+// kalau (dan hanya kalau) chi-square > critical. Auditor baca dari ref summary.
+// Kalau gak deviates → return [] (no hit).
 
 const statisticalBenfordGlobal: Rule = {
   id: "statistical_benford_global",
@@ -192,38 +224,42 @@ const statisticalBenfordGlobal: Rule = {
   label: "Benford's Law (Global)",
   description:
     "Uji goodness-of-fit distribusi digit pertama nilai SP2D vs distribusi Benford. " +
-    "Chi-square > 15,507 (df=8, α=0,05) = penyimpangan signifikan, butuh follow-up. " +
-    "Indikatif, bukan bukti fraud. Butuh populasi besar (n≥1000) supaya chi-square stabil.",
+    "Chi-square > 15,507 (df=8, alpha=0,05) = penyimpangan signifikan, butuh follow-up. " +
+    "Indikatif, bukan bukti fraud. Butuh populasi besar (n>=1000) supaya chi-square stabil.",
   citation: "Nigrini, M.J. (2012). Benford's Law: Applications for Forensic Accounting.",
-  requires: { minRows: 1000, columns: ["nilai"] },
-  evaluate(ctx: RuleContext): RuleHit {
-    if (ctx.rows.length < 1000) {
-      return {
-        ruleId: this.id,
-        flagged: [],
-        summary: { skipped: true, reason: "n<1000" },
-      };
-    }
+  run(ctx: RuleContext): RuleHit[] {
+    const rows = ctx.populasi;
+    if (rows.length < 1000) return [];
     // Exclude akun seragam supaya tes valid.
-    const eligible = ctx.rows.filter(
+    const eligible = rows.filter(
       (r) => !isAkunBenfordExcluded(akun4Prefix(r.kode_rek)),
     );
+    if (eligible.length < 1000) return [];
     const result = benfordChiSquare(eligible.map((r) => r.nilai));
-    const deviates = result.chi > BENFORD_CHI_CRITICAL_05;
-    return {
-      ruleId: this.id,
-      flagged: [], // global test — tidak flag row individual
-      summary: {
-        chi: result.chi,
-        chiCritical: BENFORD_CHI_CRITICAL_05,
-        deviates,
-        total: result.total,
-        excludedRows: ctx.rows.length - eligible.length,
-        counts: result.counts.slice(1),
-        observedRatio: result.observedRatio.slice(1),
-        expectedRatio: BENFORD_EXPECTED.slice(1),
+    if (result.chi <= BENFORD_CHI_CRITICAL_05) return [];
+    // Deviates — attach synthetic hit ke first eligible row supaya konsisten
+    // sama rule lain (row-level hit). Auditor drill-down dari ref summary.
+    const firstRow = eligible[0]!;
+    return [
+      {
+        sp2dIdx: firstRow._idx,
+        severity: "low",
+        reason:
+          `Distribusi digit pertama populasi (n=${result.total}) menyimpang ` +
+          `dari Benford: chi² = ${result.chi.toFixed(2)} > ${BENFORD_CHI_CRITICAL_05}. ` +
+          `Indikasi anomali pola nominal — perlu uji substantif per akun/OPD.`,
+        ref: {
+          scope: "global",
+          chi: result.chi,
+          chiCritical: BENFORD_CHI_CRITICAL_05,
+          total: result.total,
+          excludedRows: rows.length - eligible.length,
+          counts: result.counts.slice(1),
+          observedRatio: result.observedRatio.slice(1),
+          expectedRatio: BENFORD_EXPECTED.slice(1),
+        },
       },
-    };
+    ];
   },
 };
 
@@ -238,46 +274,38 @@ const statisticalBenfordPerAkun: Rule = {
   defaultOn: false,
   label: "Benford's Law per Akun",
   description:
-    "Uji Benford per kode rekening (prefix 4 digit) untuk akun dengan ≥500 transaksi. " +
-    "Akun seragam (51xx pegawai/gaji, 5104 honor, 5125 perjadin, 56xx hibah, 57xx bansos) " +
+    "Uji Benford per kode rekening (prefix 4 digit) untuk akun dengan >=500 transaksi. " +
+    "Akun seragam (51xx pegawai/gaji, 5102/5104 honor, 5125 perjadin, 56xx hibah, 57xx bansos) " +
     "di-exclude karena nilainya tidak naturally generated. Akun dengan chi-square > 15,507 " +
-    "di-flag untuk audit substansif.",
+    "di-flag untuk audit substansif (semua row di akun tsb).",
   citation: "Nigrini, M.J. (2012). Benford's Law: Applications for Forensic Accounting.",
-  requires: { minRows: 500, columns: ["nilai", "kode_rek"] },
-  evaluate(ctx: RuleContext): RuleHit {
-    const flagged: SP2DRow[] = [];
-    const reasons: string[] = [];
-    const akunResults: Array<Record<string, unknown>> = [];
-
-    for (const [akun, rows] of ctx.byAkun4) {
+  run(ctx: RuleContext): RuleHit[] {
+    const hits: RuleHit[] = [];
+    const byAkun = groupByAkun4(ctx.populasi);
+    for (const [akun, rows] of byAkun) {
       if (akun === "__UNKNOWN__") continue;
       if (isAkunBenfordExcluded(akun)) continue;
       if (rows.length < 500) continue;
       const result = benfordChiSquare(rows.map((r) => r.nilai));
-      const deviates = result.chi > BENFORD_CHI_CRITICAL_05;
-      akunResults.push({
-        akun,
-        n: rows.length,
-        chi: result.chi,
-        deviates,
-      });
-      if (deviates) {
-        // Flag SEMUA row di akun yang menyimpang, biar auditor bisa drill down.
-        for (const r of rows) {
-          flagged.push(r);
-          reasons.push(
-            `Akun ${akun}: chi² = ${result.chi.toFixed(2)} (> ${BENFORD_CHI_CRITICAL_05}), n=${rows.length}`,
-          );
-        }
+      if (result.chi <= BENFORD_CHI_CRITICAL_05) continue;
+      for (const r of rows) {
+        hits.push({
+          sp2dIdx: r._idx,
+          severity: "low",
+          reason:
+            `Akun ${akun}: chi² = ${result.chi.toFixed(2)} > ${BENFORD_CHI_CRITICAL_05} ` +
+            `(n=${rows.length}). Distribusi digit pertama menyimpang dari Benford — ` +
+            `perlu uji substantif.`,
+          ref: {
+            akun4: akun,
+            n: rows.length,
+            chi: result.chi,
+            chiCritical: BENFORD_CHI_CRITICAL_05,
+          },
+        });
       }
     }
-
-    return {
-      ruleId: this.id,
-      flagged,
-      reasons,
-      summary: { akunResults, chiCritical: BENFORD_CHI_CRITICAL_05 },
-    };
+    return hits;
   },
 };
 
@@ -293,63 +321,68 @@ const statisticalIqrOutlier: Rule = {
   label: "Outlier Nominal (IQR per Akun)",
   description:
     "Identifikasi SP2D dengan nilai di luar pagar Tukey (Q3 + 1.5×IQR) per akun (kode rek 4 digit). " +
-    "Membutuhkan ≥10 transaksi per akun supaya IQR meaningful. Outlier wajar saat ada proyek " +
+    "Membutuhkan >=10 transaksi per akun supaya IQR meaningful. Outlier wajar saat ada proyek " +
     "strategis bernilai besar; auditor harus cek substansi (kontrak / progress).",
-  requires: { minRows: 10, columns: ["nilai", "kode_rek"] },
-  evaluate(ctx: RuleContext): RuleHit {
-    const flagged: SP2DRow[] = [];
-    const reasons: string[] = [];
-    const akunStats: Array<Record<string, unknown>> = [];
-
-    for (const [akun, rows] of ctx.byAkun4) {
+  run(ctx: RuleContext): RuleHit[] {
+    const hits: RuleHit[] = [];
+    const byAkun = groupByAkun4(ctx.populasi);
+    for (const [akun, rows] of byAkun) {
       if (akun === "__UNKNOWN__") continue;
       if (rows.length < 10) continue;
       const values = rows.map((r) => r.nilai);
       const stats = iqrSummary(values);
       if (stats.iqr <= 0) continue; // semua nilai sama / hampir sama
-      akunStats.push({ akun, n: rows.length, q1: stats.q1, q3: stats.q3, upperFence: stats.upperFence });
       for (const r of rows) {
         if (r.nilai > stats.upperFence) {
-          flagged.push(r);
           const multiple = stats.iqr > 0 ? (r.nilai - stats.q3) / stats.iqr : 0;
-          reasons.push(
-            `Akun ${akun}: nilai Rp ${formatRp(r.nilai)} > pagar atas Rp ${formatRp(stats.upperFence)} ` +
-              `(${multiple.toFixed(1)}× IQR di atas Q3)`,
-          );
+          hits.push({
+            sp2dIdx: r._idx,
+            severity: "medium",
+            reason:
+              `Akun ${akun}: nilai Rp ${formatRp(r.nilai)} > pagar atas Rp ${formatRp(stats.upperFence)} ` +
+              `(${multiple.toFixed(1)}× IQR di atas Q3) — outlier nominal per akun.`,
+            ref: {
+              akun4: akun,
+              nilai: r.nilai,
+              q1: stats.q1,
+              q3: stats.q3,
+              iqr: stats.iqr,
+              upperFence: stats.upperFence,
+              iqrMultiple: multiple,
+              n: rows.length,
+            },
+          });
         }
       }
     }
-
-    return {
-      ruleId: this.id,
-      flagged,
-      reasons,
-      summary: { akunStats },
-    };
+    return hits;
   },
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Rule 4 — Konsentrasi vendor dalam OPD (Gini + share dominan)
+// Rule 4 — Konsentrasi vendor per OPD (Gini coefficient)
 // ──────────────────────────────────────────────────────────────────────────────
+//
+// Distinct dari `vendor_concentration_dominant` (vendor.ts) yang pakai
+// share > 50% per (OPD × akun-prefix-4). Rule ini ukur DISTRIBUSI total
+// vendor per OPD pakai Gini coefficient — statistical inequality measure,
+// bukan dominasi pasangan. ID di-rename ke `..._gini` supaya jelas distinct.
 
-const statisticalConcentrationVendorOpd: Rule = {
-  id: "statistical_concentration_vendor_opd",
+const statisticalVendorConcentrationGini: Rule = {
+  id: "statistical_vendor_concentration_gini",
   category: "statistical",
-  severity: "medium",
+  severity: "high",
   defaultOn: true,
-  label: "Konsentrasi Vendor per OPD",
+  label: "Konsentrasi Vendor per OPD (Gini)",
   description:
-    "Ukur konsentrasi belanja vendor di tiap OPD pakai Gini coefficient + share vendor dominan. " +
-    "Aspek statistik (distribusi), bukan repeat-count. Flag OPD dengan ≥5 vendor unik, total " +
-    "belanja ≥ Rp 1 M, dan (a) Gini > 0,7 atau (b) vendor dominan menguasai > 50% belanja OPD.",
-  requires: { minRows: 5, columns: ["nilai", "skpd"] },
-  evaluate(ctx: RuleContext): RuleHit {
-    const flagged: SP2DRow[] = [];
-    const reasons: string[] = [];
-    const opdStats: Array<Record<string, unknown>> = [];
-
-    for (const [skpd, rows] of ctx.bySkpd) {
+    "Ukur ketimpangan distribusi belanja vendor di tiap OPD pakai Gini coefficient + share " +
+    "vendor dominan. Aspek statistik (distribusi), bukan repeat-count. Flag OPD dengan " +
+    ">=5 vendor unik, total belanja >= Rp 1 M, dan (a) Gini > 0,7 atau (b) vendor dominan " +
+    "menguasai > 50% belanja OPD. Hanya row vendor dominan yang di-flag.",
+  run(ctx: RuleContext): RuleHit[] {
+    const hits: RuleHit[] = [];
+    const bySkpd = groupBySkpd(ctx.populasi);
+    for (const [skpd, rows] of bySkpd) {
       if (skpd === "__UNKNOWN__") continue;
       const vendorTotals = new Map<string, number>();
       const vendorRows = new Map<string, SP2DRow[]>();
@@ -357,11 +390,12 @@ const statisticalConcentrationVendorOpd: Rule = {
       for (const r of rows) {
         const vk = vendorKey(r);
         if (!vk) continue;
-        vendorTotals.set(vk, (vendorTotals.get(vk) ?? 0) + Math.max(0, r.nilai));
+        const nilai = Math.max(0, r.nilai);
+        vendorTotals.set(vk, (vendorTotals.get(vk) ?? 0) + nilai);
         const arr = vendorRows.get(vk);
         if (arr) arr.push(r);
         else vendorRows.set(vk, [r]);
-        opdTotal += Math.max(0, r.nilai);
+        opdTotal += nilai;
       }
       if (vendorTotals.size < 5) continue;
       if (opdTotal < 1_000_000_000) continue;
@@ -379,31 +413,31 @@ const statisticalConcentrationVendorOpd: Rule = {
       const dominantShare = opdTotal > 0 ? dominantTotal / opdTotal : 0;
       const hitGini = gini > 0.7;
       const hitShare = dominantShare > 0.5;
-      opdStats.push({
-        skpd,
-        vendorCount: vendorTotals.size,
-        opdTotal,
-        gini,
-        dominantShare,
-      });
-      if (hitGini || hitShare) {
-        const dominantRows = vendorRows.get(dominantVk) ?? [];
-        for (const r of dominantRows) {
-          flagged.push(r);
-          reasons.push(
+      if (!hitGini && !hitShare) continue;
+
+      const dominantRows = vendorRows.get(dominantVk) ?? [];
+      for (const r of dominantRows) {
+        hits.push({
+          sp2dIdx: r._idx,
+          severity: "high",
+          reason:
             `OPD ${skpd}: vendor dominan ${dominantVk} share ${(dominantShare * 100).toFixed(1)}%, ` +
-              `Gini ${gini.toFixed(2)}, total OPD Rp ${formatRp(opdTotal)}`,
-          );
-        }
+            `Gini ${gini.toFixed(2)}, total OPD Rp ${formatRp(opdTotal)} ` +
+            `(${vendorTotals.size} vendor unik).`,
+          ref: {
+            skpd,
+            vendorKey: dominantVk,
+            vendorCount: vendorTotals.size,
+            opdTotal,
+            dominantTotal,
+            dominantShare,
+            gini,
+            triggeredBy: hitGini && hitShare ? "gini+share" : hitGini ? "gini" : "share",
+          },
+        });
       }
     }
-
-    return {
-      ruleId: this.id,
-      flagged,
-      reasons,
-      summary: { opdStats },
-    };
+    return hits;
   },
 };
 
@@ -421,13 +455,10 @@ const statisticalRoundDistribution: Rule = {
     "Flag akun dengan > 30% SP2D bernilai kelipatan Rp 1 juta. Round number alami terjadi di " +
     "belanja pegawai/honor/perjadin/hibah/bansos (di-exclude), tapi di belanja barang/jasa " +
     "konsentrasi round number tinggi bisa indikasi nilai negosiasi / estimasi kasar.",
-  requires: { minRows: 20, columns: ["nilai", "kode_rek"] },
-  evaluate(ctx: RuleContext): RuleHit {
-    const flagged: SP2DRow[] = [];
-    const reasons: string[] = [];
-    const akunStats: Array<Record<string, unknown>> = [];
-
-    for (const [akun, rows] of ctx.byAkun4) {
+  run(ctx: RuleContext): RuleHit[] {
+    const hits: RuleHit[] = [];
+    const byAkun = groupByAkun4(ctx.populasi);
+    for (const [akun, rows] of byAkun) {
       if (akun === "__UNKNOWN__") continue;
       if (isAkunBenfordExcluded(akun)) continue; // akun lumpsum di-skip — round normal di sana
       if (rows.length < 20) continue;
@@ -436,26 +467,26 @@ const statisticalRoundDistribution: Rule = {
         if (isRoundMillion(r.nilai)) roundCount++;
       }
       const ratio = roundCount / rows.length;
-      akunStats.push({ akun, n: rows.length, roundCount, ratio });
-      if (ratio > 0.3) {
-        for (const r of rows) {
-          if (isRoundMillion(r.nilai)) {
-            flagged.push(r);
-            reasons.push(
-              `Akun ${akun}: ${(ratio * 100).toFixed(1)}% SP2D bernilai bulat Rp juta ` +
-                `(${roundCount}/${rows.length})`,
-            );
-          }
-        }
+      if (ratio <= 0.3) continue;
+      for (const r of rows) {
+        if (!isRoundMillion(r.nilai)) continue;
+        hits.push({
+          sp2dIdx: r._idx,
+          severity: "low",
+          reason:
+            `Akun ${akun}: ${(ratio * 100).toFixed(1)}% SP2D bernilai bulat Rp juta ` +
+            `(${roundCount}/${rows.length}). Nilai Rp ${formatRp(r.nilai)} termasuk round.`,
+          ref: {
+            akun4: akun,
+            nilai: r.nilai,
+            roundCount,
+            akunTotal: rows.length,
+            roundRatio: ratio,
+          },
+        });
       }
     }
-
-    return {
-      ruleId: this.id,
-      flagged,
-      reasons,
-      summary: { akunStats },
-    };
+    return hits;
   },
 };
 
@@ -467,10 +498,14 @@ export const STATISTICAL_RULES: Rule[] = [
   statisticalBenfordGlobal,
   statisticalBenfordPerAkun,
   statisticalIqrOutlier,
-  statisticalConcentrationVendorOpd,
+  statisticalVendorConcentrationGini,
   statisticalRoundDistribution,
 ];
 
-function formatRp(n: number): string {
-  return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(Math.round(n));
-}
+export {
+  statisticalBenfordGlobal,
+  statisticalBenfordPerAkun,
+  statisticalIqrOutlier,
+  statisticalVendorConcentrationGini,
+  statisticalRoundDistribution,
+};
