@@ -15,6 +15,7 @@ import {
   type AssertionKey,
   type SamplingUnit,
 } from "@/components/sampling/SamplingUnitSelector";
+import { ColumnMapper } from "@/components/sampling/ColumnMapper";
 import { useSamplingStore } from "@/store/samplingStore";
 import type { SamplingMethod } from "@/types";
 import { APP_VERSION } from "@/lib/constants";
@@ -112,6 +113,25 @@ export default function ExpressPage() {
               </span>
             </div>
           </div>
+        )}
+
+        {populasi && fingerprint && fingerprint.confidence < 0.8 && parseExtras && (
+          <ColumnMapper
+            detection={{
+              format: fingerprint.format,
+              confidence: fingerprint.confidence,
+              granularity: fingerprint.granularity,
+              reason: fingerprint.reason,
+            }}
+            headers={parseExtras.headers}
+            currentMapping={parseExtras.mapping}
+            onChange={() => {
+              /* v0.2.1: read-only display. Re-parse pipeline ditangani v0.3 */
+            }}
+            onConfirm={() => {
+              /* no-op: dismiss handled by user re-upload */
+            }}
+          />
         )}
       </section>
 

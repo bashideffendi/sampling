@@ -24,6 +24,8 @@ export function UploadDropzone() {
           populasiKoreksi: result.populasiKoreksi ?? [],
           warnings: result.warnings ?? [],
           fingerprint: result.fingerprint ?? null,
+          headers: result.headerLabels ?? [],
+          mapping: result.detection?.map ?? {},
         });
         const fpFormat = result.fingerprint?.format ?? "GENERIC";
         toast.success(

@@ -18,6 +18,7 @@ import type {
   CanonicalSP2DRow,
   BreakdownAkunRow,
   ParseWarning,
+  ResolvedColumnMapping,
 } from "@/lib/parser/canonical-row";
 import type { FingerprintResult } from "@/lib/parser/canonical-row";
 import { uid } from "@/lib/utils";
@@ -27,6 +28,10 @@ export interface ParseExtras {
   populasiKoreksi: CanonicalSP2DRow[];
   warnings: ParseWarning[];
   fingerprint: FingerprintResult | null;
+  /** Header labels (raw string) dari row deteksi — buat ColumnMapper UI. */
+  headers: string[];
+  /** Resolved mapping canonical→column index — buat ColumnMapper UI. */
+  mapping: ResolvedColumnMapping;
 }
 
 interface DraftMeta {

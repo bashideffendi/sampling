@@ -14,6 +14,7 @@ import { Play, Download, FileJson, AlertTriangle, BarChart3 } from "lucide-react
 import { toast } from "sonner";
 import type { MethodParam } from "@/types";
 import { APP_VERSION } from "@/lib/constants";
+import { SkewnessAlert } from "@/components/sampling/SkewnessAlert";
 
 export function ResultPanel() {
   const populasi = useSamplingStore((s) => s.populasi);
@@ -100,6 +101,14 @@ export function ResultPanel() {
 
       {result && (
         <div className="space-y-4">
+          {result.skewness?.isExtreme && (
+            <SkewnessAlert
+              cv={result.skewness.cv}
+              maxOverMedian={result.skewness.maxOverMedian}
+              topStratumCount={result.topStratumCount ?? 0}
+              topStratumValue={result.topStratumNilai ?? 0}
+            />
+          )}
           <div className="grid grid-cols-2 gap-3">
             <Metric label="Sample Size" value={result.sampleSize.toLocaleString("id-ID")} accent />
             <Metric

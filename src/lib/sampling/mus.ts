@@ -32,6 +32,7 @@ import type {
   SamplingResult,
   SP2DRow,
   SelectedItem,
+  SkewnessStats,
 } from "@/types";
 import { mulberry32 } from "@/lib/prng/mulberry32";
 import {
@@ -47,11 +48,7 @@ export interface MUSSampleSize {
   expectedFactor: number;
 }
 
-export interface SkewnessStats {
-  cv: number;
-  maxOverMedian: number;
-  isExtreme: boolean;
-}
+export type { SkewnessStats } from "@/types";
 
 /**
  * Skewness diagnostic:
@@ -176,19 +173,26 @@ export function musSelection(
     let cum = 0;
     let nextHit = start;
     let hitIdx = 0;
+    // Pool sudah filter `row.nilai < interval` — tiap window (cum, next] paling
+    // banyak nampung 1 hit. Pakai `if`, bukan `while`; kalau invariant rusak
+    // (item ≥ interval lolos ke pool), fail loud daripada silent under-count.
     for (const row of orderedPool) {
       const next = cum + row.nilai;
-      // Hit semua interval yang jatuh di window (cum, next] — defensive untuk
-      // kasus item value lebih besar dari interval (seharusnya udah di top stratum,
-      // tapi defensive coding).
-      while (hitIdx < nFromPool && nextHit < next) {
+      if (hitIdx < nFromPool && nextHit < next) {
         selectedFromPool.push({
           row,
           reason: "selected",
           hitValue: nextHit,
         });
         hitIdx++;
-        nextHit += interval;
+        const candidateNext = nextHit + interval;
+        if (hitIdx < nFromPool && candidateNext < next) {
+          throw new Error(
+            `MUS PPS invariant: row ${row.no_sp2d} nilai ${row.nilai} >= interval ${interval} ` +
+              `tapi gak di-route ke top stratum. Pool filter rusak.`,
+          );
+        }
+        nextHit = candidateNext;
       }
       cum = next;
       if (hitIdx >= nFromPool) break;
@@ -206,14 +210,19 @@ export function musSelection(
     ...negatives.map((row) => ({ row, reason: "negative" as const })),
   ];
 
-  // Dedup (top stratum + pool theoretically disjoint, tapi defensive).
+  // Sanity assertion: top stratum + pool by construction disjoint (pool
+  // filter `< interval`, top stratum `>= interval`). Kalau dup muncul →
+  // bug di pipeline; fail loud daripada silent hide via dedup.
   const seen = new Set<string>();
   const dedup: SelectedItem[] = [];
   for (const item of selectedItems) {
-    if (!seen.has(item.row.no_sp2d)) {
-      seen.add(item.row.no_sp2d);
-      dedup.push(item);
+    if (seen.has(item.row.no_sp2d)) {
+      throw new Error(
+        `MUS selection invariant: SP2D ${item.row.no_sp2d} muncul di >1 stratum (pool/top/koreksi).`,
+      );
     }
+    seen.add(item.row.no_sp2d);
+    dedup.push(item);
   }
 
   return {
@@ -231,5 +240,6 @@ export function musSelection(
     computedAt: new Date().toISOString(),
     rfSource: RF_SOURCE_CITATION,
     warnings,
+    skewness: skew,
   };
 }

@@ -117,6 +117,12 @@ export interface SelectedItem {
   matchedCriteria?: string[]; // for judgmental
 }
 
+export interface SkewnessStats {
+  cv: number;
+  maxOverMedian: number;
+  isExtreme: boolean;
+}
+
 export interface SamplingResult {
   method: SamplingMethod;
   param: MethodParam["param"];
@@ -132,6 +138,8 @@ export interface SamplingResult {
   computedAt: string; // ISO
   rfSource?: string; // citation
   warnings: string[];
+  /** Diagnostic skewness populasi (MUS) — typed, biar UI bisa render khusus tanpa grep warning string. */
+  skewness?: SkewnessStats;
 }
 
 export interface SeedBundle {
