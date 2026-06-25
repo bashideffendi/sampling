@@ -9,8 +9,10 @@ import {
   buildSeedBundle,
   downloadBlob,
   makeFilename,
+  exportToWord,
+  makeWordFilename,
 } from "@/lib/exporter";
-import { Play, Download, FileJson, AlertTriangle, BarChart3 } from "lucide-react";
+import { Play, Download, FileJson, FileText, AlertTriangle, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 import type { MethodParam } from "@/types";
 import { APP_VERSION } from "@/lib/constants";
@@ -73,6 +75,27 @@ export function ResultPanel() {
     });
     const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
     downloadBlob(blob, makeFilename(result, { entitas: draftMeta.entitas, tahun: draftMeta.tahun }, "json"));
+  };
+
+  const downloadWord = async () => {
+    if (!result || !populasiMeta) return;
+    try {
+      const blob = await exportToWord(result, populasiMeta, {
+        entitas: draftMeta.entitas || "Entitas",
+        tahun: draftMeta.tahun,
+        draftId: draftMeta.draftId,
+      });
+      downloadBlob(
+        blob,
+        makeWordFilename(
+          { entitas: draftMeta.entitas, tahun: draftMeta.tahun },
+          result.method,
+        ),
+      );
+      toast.success("Lampiran KKP (.docx) berhasil di-download.");
+    } catch (e) {
+      toast.error(`Generate Word gagal: ${e instanceof Error ? e.message : String(e)}`);
+    }
   };
 
   return (
@@ -157,6 +180,12 @@ export function ResultPanel() {
               className="flex items-center gap-1.5 rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-text)] transition hover:border-[var(--color-accent)]"
             >
               <Download className="h-3.5 w-3.5" /> Excel KKP
+            </button>
+            <button
+              onClick={downloadWord}
+              className="flex items-center gap-1.5 rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-text)] transition hover:border-[var(--color-accent)]"
+            >
+              <FileText className="h-3.5 w-3.5" /> Lampiran KKP
             </button>
             <button
               onClick={downloadJSON}
