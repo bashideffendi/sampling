@@ -94,17 +94,17 @@ function ActionPair() {
   return (
     <section className="mb-24 grid gap-5 sm:grid-cols-2">
       <ActionCard
-        href="/express/new"
+        href="/notebook/new"
         kicker="Primer"
-        title="Mulai Lembar Sampling"
-        body="Unggah Excel SP2D, pilih metode, atur parameter, unduh kertas kerja. Workflow tunggal halaman yang dipakai sehari-hari."
+        title="Mulai Notebook"
+        body="Mode kerja per-cell — Populasi, Materialitas, Metode, Sampling, Evaluasi. Tiap langkah punya rationale field. Audit defensibility terdokumentasi sambil kerja."
         primary
       />
       <ActionCard
-        href="/metode/mus"
-        kicker="Panduan"
-        title="Telaah Metode"
-        body="Penjelasan kapan tiap metode dipakai, formula, parameter input, dan rujukan sumber. Berguna kalau ditanya di forum AOI."
+        href="/express/new"
+        kicker="Power user"
+        title="Mode Express"
+        body="Single-page workflow. Cepat buat auditor yang udah hapal pipeline. Data + parameter di-share dengan Notebook."
       />
     </section>
   );

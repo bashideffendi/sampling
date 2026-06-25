@@ -2,15 +2,19 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useNotebookStore } from "@/store/notebookStore";
 
 /**
- * v0.1: Notebook UI belum di-build (lihat task tracker). Redirect ke Express
- * yang sudah cover 5 metode + run + download. Cell-based notebook menyusul v0.2.
+ * v0.3.7: Notebook cell-based. Create new draft + redirect ke /notebook/[id].
  */
-export default function NotebookNewRedirect() {
+export default function NewNotebookRedirect() {
   const router = useRouter();
+  const createNew = useNotebookStore((s) => s.createNew);
+
   useEffect(() => {
-    router.replace("/express/new");
-  }, [router]);
+    const nb = createNew();
+    router.replace(`/notebook/${nb.draftId}`);
+  }, [createNew, router]);
+
   return null;
 }
