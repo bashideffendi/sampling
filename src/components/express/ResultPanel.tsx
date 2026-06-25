@@ -13,6 +13,7 @@ import {
 import { Play, Download, FileJson, AlertTriangle, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 import type { MethodParam } from "@/types";
+import { APP_VERSION } from "@/lib/constants";
 
 export function ResultPanel() {
   const populasi = useSamplingStore((s) => s.populasi);
@@ -48,7 +49,7 @@ export function ResultPanel() {
       entitas: draftMeta.entitas || "Entitas",
       tahun: draftMeta.tahun,
       draftId: draftMeta.draftId,
-      appVersion: "0.2.0",
+      appVersion: APP_VERSION,
       extras: parseExtras
         ? {
             breakdown: parseExtras.breakdown,
@@ -65,7 +66,7 @@ export function ResultPanel() {
     if (!result || !populasiMeta) return;
     const bundle = buildSeedBundle(result, populasiMeta, {
       draftId: draftMeta.draftId,
-      appVersion: "0.1.0",
+      appVersion: APP_VERSION,
     });
     const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
     downloadBlob(blob, makeFilename(result, { entitas: draftMeta.entitas, tahun: draftMeta.tahun }, "json"));

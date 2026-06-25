@@ -19,7 +19,7 @@ import type {
   BreakdownAkunRow,
   ParseWarning,
 } from "@/lib/parser/canonical-row";
-import type { FingerprintResult } from "@/lib/parser/fingerprint";
+import type { FingerprintResult } from "@/lib/parser/canonical-row";
 import { uid } from "@/lib/utils";
 
 export interface ParseExtras {
@@ -135,6 +135,7 @@ const initialDraftMeta = (): DraftMeta => ({
 
 const POPULASI_KEY = (id: string) => `capcipcup:populasi:${id}`;
 const META_KEY = (id: string) => `capcipcup:populasi-meta:${id}`;
+const EXTRAS_KEY = (id: string) => `capcipcup:parse-extras:${id}`;
 
 export const useSamplingStore = create<SamplingStore>()(
   persist(
@@ -163,6 +164,11 @@ export const useSamplingStore = create<SamplingStore>()(
         const id = get().draftMeta.draftId;
         await idbSet(POPULASI_KEY(id), rows);
         await idbSet(META_KEY(id), meta);
+        if (extras) {
+          await idbSet(EXTRAS_KEY(id), extras);
+        } else {
+          await idbDel(EXTRAS_KEY(id));
+        }
         set({
           populasi: rows,
           populasiMeta: meta,
@@ -179,14 +185,16 @@ export const useSamplingStore = create<SamplingStore>()(
         const id = get().draftMeta.draftId;
         const rows = await idbGet<SP2DRow[]>(POPULASI_KEY(id));
         const meta = await idbGet<PopulasiMeta>(META_KEY(id));
+        const extras = await idbGet<ParseExtras>(EXTRAS_KEY(id));
         if (rows && meta) {
-          set({ populasi: rows, populasiMeta: meta });
+          set({ populasi: rows, populasiMeta: meta, parseExtras: extras ?? null });
         }
       },
       clearPopulasi: async () => {
         const id = get().draftMeta.draftId;
         await idbDel(POPULASI_KEY(id));
         await idbDel(META_KEY(id));
+        await idbDel(EXTRAS_KEY(id));
         set({ populasi: null, populasiMeta: null, parseExtras: null, result: null });
       },
 
@@ -204,7 +212,7 @@ export const useSamplingStore = create<SamplingStore>()(
     }),
     {
       name: "capcipcup-sampling",
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => localStorage),
       // Only persist params + meta, not populasi (yang besar, di IndexedDB).
       partialize: (s) => ({
@@ -213,6 +221,17 @@ export const useSamplingStore = create<SamplingStore>()(
         method: s.method,
         params: s.params,
       }),
+      migrate: (persistedState, version) => {
+        // v1 → v2: parseExtras moved to IDB, no params change needed here.
+        // Defensive: reset params kalau versi lama supaya tidak ada shape lama nyangkut.
+        if (version < 2) {
+          return {
+            ...(persistedState as Record<string, unknown>),
+            params: DEFAULT_PARAMS,
+          };
+        }
+        return persistedState as Record<string, unknown>;
+      },
     },
   ),
 );

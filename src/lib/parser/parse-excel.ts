@@ -19,7 +19,8 @@
  */
 
 import * as XLSX from "xlsx";
-import type { SP2DRow, PopulasiMeta, ColumnMap } from "@/types";
+import type { SP2DRow, PopulasiMeta } from "@/types";
+import type { ColumnMap } from "./header-map";
 import { detectColumns, type DetectionResult } from "./header-map";
 import {
   type CanonicalSP2DRow,
@@ -27,7 +28,8 @@ import {
   type ParseWarning,
 } from "./canonical-row";
 import { stripSubtotalRows } from "./strip-subtotal";
-import { detectFingerprint, type FingerprintResult } from "./fingerprint";
+import { detectFingerprint } from "./fingerprint";
+import type { FingerprintResult } from "./canonical-row";
 import { aggregateToSp2dLevel } from "./aggregate-sp2d";
 import { hashPopulasi } from "@/lib/sampling/population-hash";
 
@@ -245,7 +247,7 @@ function mapDirectSp2dHeader(
     const tgl = parseDate(row[map.tgl_sp2d ?? -1]);
     if (!tgl) {
       warnings.push({
-        type: "date_parse_failed",
+        type: "DATE_PARSE_FAILED",
         severity: "warn",
         message: `Tanggal SP2D ${noSp2dRaw} tidak bisa diparse — baris di-skip.`,
         ref: { no_sp2d: noSp2dRaw },
@@ -256,7 +258,7 @@ function mapDirectSp2dHeader(
     const nilai = getNum("nilai_sp2d") ?? getNum("nilai_realisasi");
     if (nilai === undefined || Number.isNaN(nilai)) {
       warnings.push({
-        type: "value_parse_failed",
+        type: "VALUE_PARSE_FAILED",
         severity: "warn",
         message: `Nilai SP2D ${noSp2dRaw} tidak bisa diparse — baris di-skip.`,
         ref: { no_sp2d: noSp2dRaw },
@@ -301,7 +303,7 @@ function mapDirectSp2dHeader(
     // Dedup: kalau no_sp2d normalized sudah ada -> warn.
     if (seen.has(noSp2dNorm)) {
       warnings.push({
-        type: "duplicate_no_sp2d",
+        type: "DUPLICATE_NO_SP2D",
         severity: "warn",
         message: `No SP2D ${noSp2dRaw} duplikat — baris kedua dipertahankan, cek source data.`,
         ref: { no_sp2d: noSp2dRaw },

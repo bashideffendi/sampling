@@ -15,7 +15,6 @@
  */
 
 import type { Format, Granularity, FingerprintResult } from "./canonical-row";
-export type { FingerprintResult } from "./canonical-row";
 
 // ---------------------------------------------------------------------------
 // Normalisasi header

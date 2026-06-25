@@ -17,6 +17,7 @@ import {
 } from "@/components/sampling/SamplingUnitSelector";
 import { useSamplingStore } from "@/store/samplingStore";
 import type { SamplingMethod } from "@/types";
+import { APP_VERSION } from "@/lib/constants";
 
 export default function ExpressPage() {
   const params = useParams<{ id: string }>();
@@ -118,7 +119,7 @@ export default function ExpressPage() {
         <section className="space-y-6">
           <SamplingUnitSelector
             onSelect={handleAssertion}
-            populasiCount={populasiMeta.count}
+            populasiCount={parseExtras?.breakdown?.length ?? populasiMeta.count}
             uniqueSp2dCount={populasiMeta.count}
           />
           {assertion && suggestedUnit && (
@@ -143,7 +144,7 @@ export default function ExpressPage() {
       <footer className="mt-20 border-t border-[var(--color-border)] pt-6 text-xs text-[var(--color-text-subtle)]">
         <div className="flex items-center justify-between">
           <span>Data SP2D diolah di peramban — tidak pernah diunggah ke server.</span>
-          <span className="mono uppercase tracking-[0.18em]">v0.2.0</span>
+          <span className="mono uppercase tracking-[0.18em]">v{APP_VERSION}</span>
         </div>
       </footer>
     </main>

@@ -61,8 +61,9 @@ export type ParseWarningType =
   | "AMBIGUOUS_GRANULARITY"
   | "FORMAT_LOW_CONFIDENCE"
   | "NEGATIVE_NILAI_KOREKSI"
-  | "date_parse_failed"
-  | "value_parse_failed";
+  | "DATE_PARSE_FAILED"
+  | "VALUE_PARSE_FAILED"
+  | "DUPLICATE_NO_SP2D";
 
 export interface ParseWarning {
   type: ParseWarningType;
@@ -92,16 +93,10 @@ export interface FingerprintResult {
   scores?: Record<string, number>;
 }
 
-/** Output proses agregasi — provides both snake_case dan camelCase aliases. */
 export interface AggregationResult {
-  /** Canonical SP2D rows (alias dari `rows`). */
   canonical: CanonicalSP2DRow[];
-  /** @deprecated gunakan `canonical`. */
-  rows?: CanonicalSP2DRow[];
   breakdown: BreakdownAkunRow[];
   warnings: ParseWarning[];
   populasiKoreksi: CanonicalSP2DRow[];
-  /** @deprecated gunakan `populasiKoreksi`. */
-  populasi_koreksi?: CanonicalSP2DRow[];
   sourceRowCount: number;
 }

@@ -23,7 +23,7 @@ interface RowSpec {
   keterangan?: unknown;
   kode_rek?: unknown;
   uraian_akun?: unknown;
-  nilai_realisasi_akun?: unknown;
+  nilai_realisasi?: unknown;
 }
 
 const COLUMNS = [
@@ -38,7 +38,7 @@ const COLUMNS = [
   "keterangan",
   "kode_rek",
   "uraian_akun",
-  "nilai_realisasi_akun",
+  "nilai_realisasi",
 ] as const;
 
 const MAPPING: ResolvedColumnMapping = {
@@ -53,7 +53,7 @@ const MAPPING: ResolvedColumnMapping = {
   keterangan: 8,
   kode_rek: 9,
   uraian_akun: 10,
-  nilai_realisasi_akun: 11,
+  nilai_realisasi: 11,
 } as ResolvedColumnMapping;
 
 function makeRawRows(specs: RowSpec[]): RawRow[] {
@@ -164,7 +164,7 @@ describe("aggregateToSp2dLevel — scenario (a) single SP2D, 3 akun, nilai konsi
         skpd: "Dinas A",
         kode_rek: "5.1.01",
         uraian_akun: "Belanja Gaji",
-        nilai_realisasi_akun: 1_000_000,
+        nilai_realisasi: 1_000_000,
       },
       {
         no_sp2d: "SP2D/001",
@@ -173,7 +173,7 @@ describe("aggregateToSp2dLevel — scenario (a) single SP2D, 3 akun, nilai konsi
         nilai_sp2d: 3_000_000,
         kode_rek: "5.1.02",
         uraian_akun: "Tunjangan",
-        nilai_realisasi_akun: 1_000_000,
+        nilai_realisasi: 1_000_000,
       },
       {
         no_sp2d: "SP2D/001",
@@ -182,16 +182,16 @@ describe("aggregateToSp2dLevel — scenario (a) single SP2D, 3 akun, nilai konsi
         nilai_sp2d: 3_000_000,
         kode_rek: "5.1.03",
         uraian_akun: "Honor",
-        nilai_realisasi_akun: 1_000_000,
+        nilai_realisasi: 1_000_000,
       },
     ]);
 
     const res = aggregateToSp2dLevel(rows, MAPPING);
-    expect(res.populasi_utama).toHaveLength(1);
-    expect(res.populasi_koreksi).toHaveLength(0);
-    expect(res.breakdown_akun).toHaveLength(3);
+    expect(res.canonical).toHaveLength(1);
+    expect(res.populasiKoreksi).toHaveLength(0);
+    expect(res.breakdown).toHaveLength(3);
 
-    const row = res.populasi_utama[0];
+    const row = res.canonical[0];
     expect(row.no_sp2d_normalized).toBe("SP2D/001");
     expect(row.nilai_sp2d).toBe(3_000_000);
     expect(row.breakdown_count).toBe(3);
@@ -209,27 +209,27 @@ describe("aggregateToSp2dLevel — scenario (b) header value inconsistent (3 dis
         tgl_sp2d: "2025-01-02",
         jenis_trx: "LS",
         nilai_sp2d: 3_000_000,
-        nilai_realisasi_akun: 1_000_000,
+        nilai_realisasi: 1_000_000,
       },
       {
         no_sp2d: "SP2D/002",
         tgl_sp2d: "2025-01-02",
         jenis_trx: "LS",
         nilai_sp2d: 3_500_000,
-        nilai_realisasi_akun: 1_000_000,
+        nilai_realisasi: 1_000_000,
       },
       {
         no_sp2d: "SP2D/002",
         tgl_sp2d: "2025-01-02",
         jenis_trx: "LS",
         nilai_sp2d: 4_000_000,
-        nilai_realisasi_akun: 1_000_000,
+        nilai_realisasi: 1_000_000,
       },
     ]);
 
     const res = aggregateToSp2dLevel(rows, MAPPING);
-    expect(res.populasi_utama).toHaveLength(1);
-    expect(res.populasi_utama[0].nilai_sp2d).toBe(4_000_000);
+    expect(res.canonical).toHaveLength(1);
+    expect(res.canonical[0].nilai_sp2d).toBe(4_000_000);
 
     const warn = res.warnings.find((w) => w.type === "INCONSISTENT_HEADER_VALUE");
     expect(warn).toBeDefined();
@@ -245,20 +245,20 @@ describe("aggregateToSp2dLevel — scenario (c) header value all empty", () => {
         tgl_sp2d: "2025-01-02",
         jenis_trx: "LS",
         nilai_sp2d: null,
-        nilai_realisasi_akun: 750_000,
+        nilai_realisasi: 750_000,
       },
       {
         no_sp2d: "SP2D/003",
         tgl_sp2d: "2025-01-02",
         jenis_trx: "LS",
         nilai_sp2d: null,
-        nilai_realisasi_akun: 250_000,
+        nilai_realisasi: 250_000,
       },
     ]);
 
     const res = aggregateToSp2dLevel(rows, MAPPING);
-    expect(res.populasi_utama).toHaveLength(1);
-    expect(res.populasi_utama[0].nilai_sp2d).toBe(1_000_000);
+    expect(res.canonical).toHaveLength(1);
+    expect(res.canonical[0].nilai_sp2d).toBe(1_000_000);
 
     const warn = res.warnings.find((w) => w.type === "NILAI_SP2D_FALLBACK_SUM");
     expect(warn).toBeDefined();
@@ -273,19 +273,19 @@ describe("aggregateToSp2dLevel — scenario (d) sum mismatch >= Rp 1", () => {
         tgl_sp2d: "2025-01-02",
         jenis_trx: "LS",
         nilai_sp2d: 1_000_000,
-        nilai_realisasi_akun: 600_000,
+        nilai_realisasi: 600_000,
       },
       {
         no_sp2d: "SP2D/004",
         tgl_sp2d: "2025-01-02",
         jenis_trx: "LS",
         nilai_sp2d: 1_000_000,
-        nilai_realisasi_akun: 350_000,
+        nilai_realisasi: 350_000,
       },
     ]);
 
     const res = aggregateToSp2dLevel(rows, MAPPING);
-    expect(res.populasi_utama[0].nilai_sp2d).toBe(1_000_000);
+    expect(res.canonical[0].nilai_sp2d).toBe(1_000_000);
 
     const warn = res.warnings.find((w) => w.type === "SUM_MISMATCH");
     expect(warn).toBeDefined();
@@ -298,7 +298,7 @@ describe("aggregateToSp2dLevel — scenario (d) sum mismatch >= Rp 1", () => {
         tgl_sp2d: "2025-01-02",
         jenis_trx: "LS",
         nilai_sp2d: 1_000_000,
-        nilai_realisasi_akun: 1_000_000.4,
+        nilai_realisasi: 1_000_000.4,
       },
     ]);
     const res = aggregateToSp2dLevel(rows, MAPPING);
@@ -314,13 +314,13 @@ describe("aggregateToSp2dLevel — scenario (e) negative value routed to koreksi
         tgl_sp2d: "2025-01-02",
         jenis_trx: "LS",
         nilai_sp2d: -500_000,
-        nilai_realisasi_akun: -500_000,
+        nilai_realisasi: -500_000,
       },
     ]);
     const res = aggregateToSp2dLevel(rows, MAPPING);
-    expect(res.populasi_utama).toHaveLength(0);
-    expect(res.populasi_koreksi).toHaveLength(1);
-    expect(res.populasi_koreksi[0].nilai_sp2d).toBe(-500_000);
+    expect(res.canonical).toHaveLength(0);
+    expect(res.populasiKoreksi).toHaveLength(1);
+    expect(res.populasiKoreksi[0].nilai_sp2d).toBe(-500_000);
   });
 });
 
@@ -332,13 +332,13 @@ describe("aggregateToSp2dLevel — scenario (f) jenis_trx PFK routed to koreksi"
         tgl_sp2d: "2025-01-02",
         jenis_trx: "PFK",
         nilai_sp2d: 1_000_000,
-        nilai_realisasi_akun: 1_000_000,
+        nilai_realisasi: 1_000_000,
       },
     ]);
     const res = aggregateToSp2dLevel(rows, MAPPING);
-    expect(res.populasi_utama).toHaveLength(0);
-    expect(res.populasi_koreksi).toHaveLength(1);
-    expect(res.populasi_koreksi[0].jenis_trx).toBe("PFK");
+    expect(res.canonical).toHaveLength(0);
+    expect(res.populasiKoreksi).toHaveLength(1);
+    expect(res.populasiKoreksi[0].jenis_trx).toBe("PFK");
   });
 
   it("RETUR also routed to populasi_koreksi", () => {
@@ -348,11 +348,11 @@ describe("aggregateToSp2dLevel — scenario (f) jenis_trx PFK routed to koreksi"
         tgl_sp2d: "2025-01-02",
         jenis_trx: "RETUR",
         nilai_sp2d: 250_000,
-        nilai_realisasi_akun: 250_000,
+        nilai_realisasi: 250_000,
       },
     ]);
     const res = aggregateToSp2dLevel(rows, MAPPING);
-    expect(res.populasi_koreksi).toHaveLength(1);
+    expect(res.populasiKoreksi).toHaveLength(1);
   });
 });
 
@@ -364,14 +364,14 @@ describe("aggregateToSp2dLevel — scenario (g) mixed jenis_trx in group", () =>
         tgl_sp2d: "2025-01-02",
         jenis_trx: "LS",
         nilai_sp2d: 2_000_000,
-        nilai_realisasi_akun: 1_000_000,
+        nilai_realisasi: 1_000_000,
       },
       {
         no_sp2d: "SP2D/007",
         tgl_sp2d: "2025-01-02",
         jenis_trx: "GU",
         nilai_sp2d: 2_000_000,
-        nilai_realisasi_akun: 1_000_000,
+        nilai_realisasi: 1_000_000,
       },
     ]);
     const res = aggregateToSp2dLevel(rows, MAPPING);
@@ -379,7 +379,7 @@ describe("aggregateToSp2dLevel — scenario (g) mixed jenis_trx in group", () =>
     expect(warn).toBeDefined();
     expect(warn?.severity).toBe("warn");
     // Tetap diproses jadi satu canonical row.
-    expect(res.populasi_utama).toHaveLength(1);
+    expect(res.canonical).toHaveLength(1);
   });
 });
 
@@ -391,19 +391,19 @@ describe("aggregateToSp2dLevel — scenario (h) empty no_sp2d", () => {
         tgl_sp2d: "2025-01-02",
         jenis_trx: "LS",
         nilai_sp2d: 1_000_000,
-        nilai_realisasi_akun: 1_000_000,
+        nilai_realisasi: 1_000_000,
       },
       {
         no_sp2d: "SP2D/008",
         tgl_sp2d: "2025-01-02",
         jenis_trx: "LS",
         nilai_sp2d: 500_000,
-        nilai_realisasi_akun: 500_000,
+        nilai_realisasi: 500_000,
       },
     ]);
     const res = aggregateToSp2dLevel(rows, MAPPING);
-    expect(res.populasi_utama).toHaveLength(1);
-    expect(res.populasi_utama[0].no_sp2d_normalized).toBe("SP2D/008");
+    expect(res.canonical).toHaveLength(1);
+    expect(res.canonical[0].no_sp2d_normalized).toBe("SP2D/008");
 
     const warn = res.warnings.find((w) => w.type === "EMPTY_SP2D_NUMBER");
     expect(warn).toBeDefined();
@@ -418,14 +418,14 @@ describe("aggregateToSp2dLevel — scenario (i) re-issuance suspect (different d
         tgl_sp2d: "2025-01-02",
         jenis_trx: "LS",
         nilai_sp2d: 1_000_000,
-        nilai_realisasi_akun: 500_000,
+        nilai_realisasi: 500_000,
       },
       {
         no_sp2d: "SP2D/009",
         tgl_sp2d: "2025-03-15",
         jenis_trx: "LS",
         nilai_sp2d: 1_000_000,
-        nilai_realisasi_akun: 500_000,
+        nilai_realisasi: 500_000,
       },
     ]);
     const res = aggregateToSp2dLevel(rows, MAPPING);
@@ -443,25 +443,25 @@ describe("aggregateToSp2dLevel — deterministic ordering", () => {
         tgl_sp2d: "2025-01-02",
         jenis_trx: "LS",
         nilai_sp2d: 100,
-        nilai_realisasi_akun: 100,
+        nilai_realisasi: 100,
       },
       {
         no_sp2d: "SP2D/A",
         tgl_sp2d: "2025-01-02",
         jenis_trx: "LS",
         nilai_sp2d: 200,
-        nilai_realisasi_akun: 200,
+        nilai_realisasi: 200,
       },
       {
         no_sp2d: "SP2D/M",
         tgl_sp2d: "2025-01-02",
         jenis_trx: "LS",
         nilai_sp2d: 300,
-        nilai_realisasi_akun: 300,
+        nilai_realisasi: 300,
       },
     ]);
     const res = aggregateToSp2dLevel(rows, MAPPING);
-    expect(res.populasi_utama.map((r) => r.no_sp2d_normalized)).toEqual([
+    expect(res.canonical.map((r) => r.no_sp2d_normalized)).toEqual([
       "SP2D/A",
       "SP2D/M",
       "SP2D/Z",

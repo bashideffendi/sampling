@@ -22,6 +22,7 @@ import type {
   AggregationResult,
   JenisTrx,
   ResolvedColumnMapping,
+  CanonicalField,
 } from "./canonical-row";
 
 // ---------- Types ----------
@@ -211,14 +212,14 @@ export function parseRupiah(raw: unknown): number | null {
 function getCell(
   row: RawRow,
   mapping: ResolvedColumnMapping,
-  field: string,
+  field: CanonicalField,
 ): unknown {
-  const col = mapping[field as keyof ResolvedColumnMapping];
+  const col = mapping[field];
   if (col === undefined || col === null) return undefined;
-  return row[col as keyof RawRow];
+  return row[col];
 }
 
-function strCell(row: RawRow, mapping: ResolvedColumnMapping, field: string): string {
+function strCell(row: RawRow, mapping: ResolvedColumnMapping, field: CanonicalField): string {
   const v = getCell(row, mapping, field);
   if (v == null) return "";
   return String(v).trim();
@@ -227,13 +228,13 @@ function strCell(row: RawRow, mapping: ResolvedColumnMapping, field: string): st
 export function sumBy(
   rows: RawRow[],
   mapping: ResolvedColumnMapping,
-  field: string,
+  field: CanonicalField,
 ): number {
-  const col = mapping[field as keyof ResolvedColumnMapping];
+  const col = mapping[field];
   if (col === undefined || col === null) return 0;
   let total = 0;
   for (const r of rows) {
-    const v = parseRupiah(r[col as keyof RawRow]);
+    const v = parseRupiah(r[col]);
     if (v != null) total += v;
   }
   return total;
@@ -337,7 +338,7 @@ export function aggregateToSp2dLevel(
       }
     }
 
-    const sumRealisasi = sumBy(members, mapping, "nilai_realisasi_akun");
+    const sumRealisasi = sumBy(members, mapping, "nilai_realisasi");
     let nilaiSp2d: number;
 
     if (distinctHeaderValues.length === 0) {
@@ -403,7 +404,7 @@ export function aggregateToSp2dLevel(
     for (const m of members) {
       const kodeRek = strCell(m, mapping, "kode_rek");
       const uraianAkun = strCell(m, mapping, "uraian_akun");
-      const nilaiAkun = parseRupiah(getCell(m, mapping, "nilai_realisasi_akun"));
+      const nilaiAkun = parseRupiah(getCell(m, mapping, "nilai_realisasi"));
       breakdownAkun.push({
         no_sp2d_normalized: key,
         kode_rek: kodeRek || undefined,
@@ -431,9 +432,7 @@ export function aggregateToSp2dLevel(
 
   return {
     canonical: populasiUtama,
-    rows: populasiUtama,
     populasiKoreksi: populasiKoreksi,
-    populasi_koreksi: populasiKoreksi,
     breakdown: breakdownAkun,
     warnings,
     sourceRowCount: raw.length,
