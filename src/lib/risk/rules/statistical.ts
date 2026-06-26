@@ -22,6 +22,7 @@
 
 import type { SP2DRow } from "@/types";
 import type { Rule, RuleContext, RuleHit } from "../types";
+import { vendorKey as sharedVendorKey } from "./vendor";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers (exported buat test + reuse rule lain)
@@ -172,11 +173,12 @@ export function isRoundMillion(n: number): boolean {
   return Math.abs(n) % 1_000_000 === 0;
 }
 
+// v0.3.11: pakai shared vendorKey dari vendor.ts (lowercase npwp:/name:)
+// supaya konsisten lintas modul (vendor.ts, cluster/engine.ts, statistical.ts).
+// Sebelumnya statistical.ts pake UPPERCASE NPWP:/NAME: → vendor sama bisa
+// keflag inkonsisten antar rule kalau ada dedup cross-rule di masa depan.
 function vendorKey(row: SP2DRow): string {
-  const npwp = (row.npwp ?? "").replace(/\D/g, "");
-  if (npwp.length === 15 || npwp.length === 16) return `NPWP:${npwp}`;
-  const name = (row.penyedia ?? "").trim().toUpperCase();
-  return name ? `NAME:${name}` : "";
+  return sharedVendorKey(row) ?? "";
 }
 
 function formatRp(n: number): string {
