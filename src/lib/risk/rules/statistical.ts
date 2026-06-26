@@ -288,22 +288,30 @@ const statisticalBenfordPerAkun: Rule = {
       if (rows.length < 500) continue;
       const result = benfordChiSquare(rows.map((r) => r.nilai));
       if (result.chi <= BENFORD_CHI_CRITICAL_05) continue;
-      for (const r of rows) {
-        hits.push({
-          sp2dIdx: r._idx,
-          severity: "low",
-          reason:
-            `Akun ${akun}: chi² = ${result.chi.toFixed(2)} > ${BENFORD_CHI_CRITICAL_05} ` +
-            `(n=${rows.length}). Distribusi digit pertama menyimpang dari Benford — ` +
-            `perlu uji substantif.`,
-          ref: {
-            akun4: akun,
-            n: rows.length,
-            chi: result.chi,
-            chiCritical: BENFORD_CHI_CRITICAL_05,
-          },
-        });
-      }
+      // Emit SATU hit summary per akun + cantumkan top-5 row dengan nilai terbesar
+      // sebagai sample buat auditor mulai investigasi. Sebelumnya emit 1 hit per
+      // row di akun → 500-row akun fail = 500 hit identik (banjir UI).
+      const sampleIdxs = rows
+        .slice()
+        .sort((a, b) => b.nilai - a.nilai)
+        .slice(0, 5)
+        .map((r) => r._idx);
+      // Pick row pertama sebagai anchor sp2dIdx (UI butuh single _idx buat link).
+      hits.push({
+        sp2dIdx: sampleIdxs[0],
+        severity: "low",
+        reason:
+          `Akun ${akun}: chi² = ${result.chi.toFixed(2)} > ${BENFORD_CHI_CRITICAL_05} ` +
+          `(n=${rows.length}). Distribusi digit pertama menyimpang dari Benford — ` +
+          `${rows.length} transaksi di akun ini perlu uji substantif (top-5 di ref.sample).`,
+        ref: {
+          akun4: akun,
+          n: rows.length,
+          chi: result.chi,
+          chiCritical: BENFORD_CHI_CRITICAL_05,
+          sample: sampleIdxs,
+        },
+      });
     }
     return hits;
   },

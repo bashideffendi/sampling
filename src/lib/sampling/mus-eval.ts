@@ -75,7 +75,11 @@ export function computeUML(param: UMLParam): UMLResult {
   const rf0 = reliabilityFactor(confidence, 0);
   const basicPrecision = J * rf0;
 
-  // Projected misstatement per item
+  // Projected misstatement per item.
+  // EDGE CASE bookValue=0 (ghost SP2D — recorded as 0 tapi audit > 0):
+  // PPS sampling normally tidak pernah pilih item dengan size=0 (probabilitas=0),
+  // jadi ini anomali sample. Treat as known misstatement penuh — PM = audit-book
+  // langsung tanpa taint projection (sama kayak top stratum semantically).
   const perItem: ProjectedItem[] = inputs.map((m) => {
     const misst = m.bookValue - m.auditValue;
     if (m.isTopStratum) {
@@ -89,7 +93,19 @@ export function computeUML(param: UMLParam): UMLResult {
         isTopStratum: true,
       };
     }
-    const taint = m.bookValue > 0 ? misst / m.bookValue : 0;
+    if (m.bookValue <= 0) {
+      // Anomali sample (book=0). Pakai misstatement langsung — jangan silent PM=0.
+      return {
+        no_sp2d: m.no_sp2d,
+        bookValue: m.bookValue,
+        auditValue: m.auditValue,
+        misstatement: misst,
+        taintPercent: misst === 0 ? 0 : 1,
+        projectedMisstatement: misst,
+        isTopStratum: true, // treat as direct, skip IA
+      };
+    }
+    const taint = misst / m.bookValue;
     const projected = taint * J;
     return {
       no_sp2d: m.no_sp2d,

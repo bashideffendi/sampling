@@ -218,12 +218,18 @@ export const gapNomorSP2D: Rule = {
     const rows = ctx.populasi;
     const gapThreshold = DEFAULT_GAP_THRESHOLD;
 
-    // Group per SKPD, ekstrak sequence number, sort, deteksi gap.
-    const bySKPD = groupBy(rows, (r) => normalizeText(r.skpd) || null);
+    // Group per (SKPD, jenis_spm) — sequence nomor SP2D LS/GU/UP/TU jalan
+    // INDEPENDEN. Gabung ke satu sekuens bikin fake gap (LS 100 → GU 1 = gap 99).
+    // Default ke 'UNKNOWN' kalau jenis_spm kosong supaya tetap di-grouping.
+    const bySKPDJenis = groupBy(rows, (r) => {
+      const skpd = normalizeText(r.skpd);
+      const jenis = normalizeText(r.jenis_spm) || "UNKNOWN";
+      return skpd ? `${skpd}|${jenis}` : null;
+    });
 
     const severity: Severity = "medium";
     const hits: RuleHit[] = [];
-    for (const [, group] of bySKPD) {
+    for (const [, group] of bySKPDJenis) {
       // Map row -> seq
       const enriched = group
         .map((r) => ({ r, seq: extractSP2DSeq(r.no_sp2d) }))
