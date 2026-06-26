@@ -279,7 +279,7 @@ const statisticalBenfordPerAkun: Rule = {
     "Uji Benford per kode rekening (prefix 4 digit) untuk akun dengan >=500 transaksi. " +
     "Akun seragam (51xx pegawai/gaji, 5102/5104 honor, 5125 perjadin, 56xx hibah, 57xx bansos) " +
     "di-exclude karena nilainya tidak naturally generated. Akun dengan chi-square > 15,507 " +
-    "di-flag untuk audit substansif (semua row di akun tsb).",
+    "di-flag — 1 summary hit per akun, top-5 row referensi di ref.sample (v0.3.10).",
   citation: "Nigrini, M.J. (2012). Benford's Law: Applications for Forensic Accounting.",
   run(ctx: RuleContext): RuleHit[] {
     const hits: RuleHit[] = [];
@@ -385,10 +385,11 @@ const statisticalVendorConcentrationGini: Rule = {
   defaultOn: true,
   label: "Konsentrasi Vendor per OPD (Gini)",
   description:
-    "Ukur ketimpangan distribusi belanja vendor di tiap OPD pakai Gini coefficient + share " +
-    "vendor dominan. Aspek statistik (distribusi), bukan repeat-count. Flag OPD dengan " +
-    ">=5 vendor unik, total belanja >= Rp 1 M, dan (a) Gini > 0,7 atau (b) vendor dominan " +
-    "menguasai > 50% belanja OPD. Hanya row vendor dominan yang di-flag.",
+    "Ukur ketimpangan distribusi belanja vendor di tiap OPD pakai Gini coefficient. " +
+    "Aspek statistik (distribusi), bukan repeat-count. Flag OPD dengan >=5 vendor unik, " +
+    "total belanja >= Rp 1 M, dan Gini > 0,7. Trigger dominant-share dihapus v0.3.12 " +
+    "karena overlap sama vendor_concentration_dominant (vendor.ts, granular per OPD×akun). " +
+    "Hanya row vendor dominan yang di-flag.",
   run(ctx: RuleContext): RuleHit[] {
     const hits: RuleHit[] = [];
     const bySkpd = groupBySkpd(ctx.populasi);

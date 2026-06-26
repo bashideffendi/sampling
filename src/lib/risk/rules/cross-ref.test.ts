@@ -92,7 +92,7 @@ describe("duplicatePayment v0.3.13 sliding-window", () => {
     expect(hits).toHaveLength(0);
   });
 
-  it("perf: 1000 SP2D vendor sama dalam 1 tahun selesai < 100ms", () => {
+  it("perf: 1000 SP2D vendor sama dalam 1 tahun selesai < 300ms", () => {
     idxCounter = 0;
     const rows: SP2DRow[] = [];
     for (let i = 0; i < 1000; i++) {

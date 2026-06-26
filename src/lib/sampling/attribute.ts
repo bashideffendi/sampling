@@ -20,6 +20,7 @@ import {
   ATTRIBUTE_TABLE_SOURCE_CITATION,
 } from "@/lib/sampling/attribute-table";
 import { reliabilityFactor } from "@/lib/sampling/rf-table";
+import { sortBySP2DSeq } from "@/lib/sampling/sort-sp2d";
 
 export interface AttributeSampleSize {
   n: number;
@@ -64,7 +65,7 @@ export function attributeSelection(
   const n = Math.min(sizing.n, populasi.length);
   const rng = mulberry32(param.seed);
   const indices = sampleIndices(populasi.length, n, rng);
-  const ordered = [...populasi].sort((a, b) => (a.no_sp2d < b.no_sp2d ? -1 : 1));
+  const ordered = [...populasi].sort(sortBySP2DSeq);
   const selectedItems: SelectedItem[] = indices.map((i) => ({
     row: ordered[i],
     reason: "selected",

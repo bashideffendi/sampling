@@ -39,6 +39,7 @@ import {
   RF_SOURCE_CITATION,
   reliabilityFactor,
 } from "@/lib/sampling/rf-table";
+import { sortBySP2DSeq } from "@/lib/sampling/sort-sp2d";
 
 export interface MUSSampleSize {
   n: number;
@@ -169,7 +170,7 @@ export function musSelection(
     const rng = mulberry32(param.seed);
     const start = rng() * interval; // ∈ [0, J)
     // Stable order by no_sp2d biar deterministik (kalau dataset sama, hasil sama).
-    const orderedPool = [...pool].sort((a, b) => (a.no_sp2d < b.no_sp2d ? -1 : 1));
+    const orderedPool = [...pool].sort(sortBySP2DSeq);
     let cum = 0;
     let nextHit = start;
     let hitIdx = 0;

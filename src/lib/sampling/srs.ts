@@ -17,6 +17,7 @@
 import type { SRSParam, SamplingResult, SP2DRow, SelectedItem } from "@/types";
 import { mulberry32, sampleIndices } from "@/lib/prng/mulberry32";
 import { zScore } from "@/lib/sampling/rf-table";
+import { sortBySP2DSeq } from "@/lib/sampling/sort-sp2d";
 
 export interface SRSSampleSize {
   n: number;
@@ -51,7 +52,8 @@ export function srsSelection(populasi: SP2DRow[], param: SRSParam): SamplingResu
   const rng = mulberry32(param.seed);
   const indices = sampleIndices(populasi.length, sizing.n, rng);
   // Stable order: sort populasi by no_sp2d biar reproducibility seed sama populasi sama = hasil sama
-  const ordered = [...populasi].sort((a, b) => (a.no_sp2d < b.no_sp2d ? -1 : 1));
+  // v0.3.14: shared SP2D sort numerik (sebelumnya lex).
+  const ordered = [...populasi].sort(sortBySP2DSeq);
   const selectedItems: SelectedItem[] = indices.map((i) => ({
     row: ordered[i],
     reason: "selected",

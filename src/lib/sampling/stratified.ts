@@ -26,6 +26,7 @@ import type {
 } from "@/types";
 import { mulberry32, sampleIndices } from "@/lib/prng/mulberry32";
 import { zScore } from "@/lib/sampling/rf-table";
+import { sortBySP2DSeq } from "@/lib/sampling/sort-sp2d";
 
 interface StratumStats {
   index: number;
@@ -197,7 +198,7 @@ export function stratifiedSelection(
     if (alloc.n_h <= 0) return;
     const stratum = strata.find((s) => s.index === alloc.stratumIndex);
     if (!stratum) return;
-    const ordered = [...stratum.rows].sort((a, b) => (a.no_sp2d < b.no_sp2d ? -1 : 1));
+    const ordered = [...stratum.rows].sort(sortBySP2DSeq);
     const idxs = sampleIndices(ordered.length, alloc.n_h, rng);
     for (const i of idxs) {
       restItems.push({ row: ordered[i], reason: "selected", stratum: alloc.stratumIndex });

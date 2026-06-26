@@ -187,11 +187,17 @@ export const vendorConcentrationDominant: Rule = {
     // di-emit → 1 vendor dengan 50 SP2D = 50 hit identik = tabel UI banjir
     // duplikasi. Pilih top-5 by nilai biar auditor liat yang paling material.
     const MAX_HITS_PER_BUCKET = 5;
+    // v0.3.14 perf: build idx→nilai Map sekali, hindari O(N) find() per idx
+    // per bucket. Bisa 195M ops di 39k row × banyak bucket vendor dominan.
+    const idxToNilai = new Map<number, number>();
+    for (const r of ctx.populasi) {
+      if (typeof r._idx === "number") idxToNilai.set(r._idx, r.nilai);
+    }
     for (const bucket of shares.values()) {
       if (bucket.share <= CONCENTRATION_THRESHOLD) continue;
       const sharePct = (bucket.share * 100).toFixed(1);
       const rowsByValue = bucket.rowIdxs
-        .map((idx) => ({ idx, nilai: ctx.populasi.find((r) => r._idx === idx)?.nilai ?? 0 }))
+        .map((idx) => ({ idx, nilai: idxToNilai.get(idx) ?? 0 }))
         .sort((a, b) => b.nilai - a.nilai);
       const totalInBucket = rowsByValue.length;
       const top = rowsByValue.slice(0, MAX_HITS_PER_BUCKET);

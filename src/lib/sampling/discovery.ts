@@ -24,6 +24,7 @@ import type {
   SelectedItem,
 } from "@/types";
 import { mulberry32, sampleIndices } from "@/lib/prng/mulberry32";
+import { sortBySP2DSeq } from "@/lib/sampling/sort-sp2d";
 
 export interface DiscoverySampleSize {
   n: number;
@@ -88,27 +89,4 @@ export function discoverySelection(
   };
 }
 
-/**
- * Sort SP2D by running number numerik (BUKAN lex string).
- * "SP2D-10" sebelum "SP2D-9" kalau lex; ekstrak running number biar benar.
- */
-function sortBySP2DSeq(a: SP2DRow, b: SP2DRow): number {
-  const sa = extractSeq(a.no_sp2d);
-  const sb = extractSeq(b.no_sp2d);
-  if (sa !== null && sb !== null) return sa - sb;
-  return (a.no_sp2d ?? "") < (b.no_sp2d ?? "") ? -1 : 1;
-}
-
-function extractSeq(noSP2D: string | undefined): number | null {
-  if (!noSP2D) return null;
-  const tokens = noSP2D.split(/[^0-9]+/).filter((t) => t.length >= 4);
-  if (tokens.length === 0) return null;
-  const sorted = [...tokens].sort((x, y) => {
-    if (y.length !== x.length) return y.length - x.length;
-    const xIsYear = +x >= 1900 && +x <= 2100;
-    const yIsYear = +y >= 1900 && +y <= 2100;
-    return Number(xIsYear) - Number(yIsYear);
-  });
-  const n = Number(sorted[0]);
-  return Number.isFinite(n) ? n : null;
-}
+// v0.3.14: sortBySP2DSeq pindah ke @/lib/sampling/sort-sp2d (shared 7 metode).

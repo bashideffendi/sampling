@@ -156,8 +156,8 @@ export const LIBUR_NASIONAL_2026: ReadonlyArray<string> = [
   "2026-04-03", // Wafat Isa Almasih
   "2026-05-01", // Hari Buruh
   "2026-05-14", // Kenaikan Isa Almasih
-  "2026-05-31", // Waisak (estimate)
   "2026-05-27", // Idul Adha (estimate)
+  "2026-05-31", // Waisak (estimate)
   "2026-06-01", // Pancasila
   "2026-06-16", // Tahun Baru Hijriyah (estimate)
   "2026-08-17", // Kemerdekaan
