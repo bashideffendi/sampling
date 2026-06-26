@@ -111,7 +111,10 @@ export function classifyPengadaan(
  */
 export function isExemptAccount(row: SP2DRow): boolean {
   const k = (row.kode_rek ?? "").replace(/[^0-9]/g, "");
+  // Permendagri 13/2006: 56=hibah, 57=bansos.
+  // Permendagri 90/2019: 5.1.06 (hibah) = '5106xx', 5.1.07 (bansos) = '5107xx'.
   if (k.startsWith("56") || k.startsWith("57")) return true;
+  if (k.startsWith("5106") || k.startsWith("5107")) return true;
   const blob = `${row.uraian ?? ""} ${row.kode_rek ?? ""} ${row.jenis_spm ?? ""}`.toLowerCase();
   if (/\bhonor(arium)?\b/.test(blob)) return true;
   if (/perjalanan\s*dinas|perjadin\b/.test(blob)) return true;

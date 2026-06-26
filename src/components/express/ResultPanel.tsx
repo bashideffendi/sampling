@@ -20,7 +20,15 @@ import { SkewnessAlert } from "@/components/sampling/SkewnessAlert";
 import { MisstatementInput } from "@/components/sampling/MisstatementInput";
 import type { ConfidenceLevel } from "@/types";
 
-export function ResultPanel() {
+interface ResultPanelProps {
+  /**
+   * Sembunyiin section Evaluasi MUS (MisstatementInput) — dipakai di Notebook
+   * mode dimana EvaluasiCell render-nya sendiri. Default false (Express tetep inline).
+   */
+  hideEvaluation?: boolean;
+}
+
+export function ResultPanel({ hideEvaluation = false }: ResultPanelProps = {}) {
   const populasi = useSamplingStore((s) => s.populasi);
   const populasiMeta = useSamplingStore((s) => s.populasiMeta);
   const parseExtras = useSamplingStore((s) => s.parseExtras);
@@ -197,7 +205,7 @@ export function ResultPanel() {
 
           <SamplePreview result={result} />
 
-          {result.method === "mus" && (
+          {result.method === "mus" && !hideEvaluation && (
             <MisstatementInput
               result={result}
               confidence={params.mus.confidenceLevel as ConfidenceLevel}

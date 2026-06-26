@@ -110,7 +110,11 @@ export function stratifiedSampleSize(
     nRaw = (sumNh_Sh * sumNh_Sh) / (V_total + sumNh_Sh2);
   }
   const totalRestN = strata.reduce((s, st) => s + st.N_h, 0);
-  const n = Math.min(totalRestN, Math.max(1, Math.ceil(nRaw)));
+  // Min sample size = max(1, jumlah stratum yang non-empty) supaya stratifikasi
+  // gak collapse ke 1 stratum (kasus nRaw < 1 di populasi seragam / S_h kecil).
+  // Kalau totalRestN < strata.length, fallback ke totalRestN (semua di-inspect).
+  const minN = sumNh_Sh > 0 ? Math.min(strata.length, totalRestN) : 1;
+  const n = Math.min(totalRestN, Math.max(minN, Math.ceil(nRaw)));
 
   // Allocation
   const idealAlloc: number[] = strata.map((st) => {

@@ -78,11 +78,14 @@ export interface RuleHit {
  *
  * `defaultOn` vs `defaultOff`:
  * - `defaultOn: true`  → rule aktif by default di Risk Helper run.
- * - `defaultOff: true` → rule DI-SKIP oleh engine sampai caller eksplisit enable.
- *   Dipakai buat rule yang butuh data ekstra (pagu, master vendor) atau yang
- *   high-false-positive di konteks tertentu (timing weekend buat LS gaji).
+ * - `defaultOff: true` → rule EXCLUDED dari default active set (via
+ *   `getDefaultActiveRuleIds` di index.ts). Dipakai buat rule yang butuh data
+ *   ekstra (pagu, master vendor) atau yang high-false-positive di konteks
+ *   tertentu (timing weekend buat LS gaji).
  *
- * Kalau dua-duanya di-set, `defaultOff` menang (lebih restrictive).
+ * CATATAN v0.3.8: Engine TIDAK lagi cek defaultOff. Kalau caller (UI) eksplisit
+ * pasing rule defaultOff ke `runRiskRules`, engine jalanin. Caller (mis. "Select
+ * All" di Risk Helper) bertanggung jawab filter via activeIds.
  */
 export interface Rule {
   id: string;

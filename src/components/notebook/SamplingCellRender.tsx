@@ -28,7 +28,8 @@ export function SamplingCellRender({ cell }: { cell: SamplingCell }) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <ParamPanel />
-      <ResultPanel />
+      {/* Evaluasi MUS sengaja disembunyiin — EvaluasiCell yg render. */}
+      <ResultPanel hideEvaluation />
     </div>
   );
 }

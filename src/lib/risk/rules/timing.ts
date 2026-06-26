@@ -101,7 +101,7 @@ export function isRutinGajiTunjangan(row: SP2DRow): boolean {
   // Fallback: kata kunci gaji/tunjangan/honor rutin di uraian / keterangan
   const text = `${uraian} ${keterangan}`;
   if (
-    /\b(gaji|tunjangan(\s|$)|tukin|tpp|penghasilan tetap|tambahan penghasilan)\b/.test(
+    /\b(gaji|tunjangan|tukin|tpp|penghasilan\s+tetap|tambahan\s+penghasilan)\b/.test(
       text,
     )
   ) {
