@@ -121,26 +121,42 @@ export const duplicatePayment: Rule = {
     const hits: RuleHit[] = [];
     for (const [, group] of clusters) {
       if (group.length < 2) continue;
-      // Cek pair-wise window
-      const sorted = [...group].sort((a, b) =>
-        (a.tgl_sp2d ?? "").localeCompare(b.tgl_sp2d ?? "")
-      );
+      // v0.3.13 perf: sliding window O(n) per cluster, BUKAN pair-wise O(n²).
+      // Filter row tanpa tanggal — gak bisa diukur jarak hari.
+      const dated = group
+        .filter((r) => !!r.tgl_sp2d)
+        .sort((a, b) => (a.tgl_sp2d ?? "").localeCompare(b.tgl_sp2d ?? ""));
+      if (dated.length < 2) continue;
+
       const inWindow = new Set<number>();
-      for (let i = 0; i < sorted.length; i++) {
-        for (let j = i + 1; j < sorted.length; j++) {
-          const dist = daysBetween(sorted[i].tgl_sp2d, sorted[j].tgl_sp2d);
-          if (dist === null) continue;
-          if (dist <= windowDays) {
-            inWindow.add(sorted[i]._idx);
-            inWindow.add(sorted[j]._idx);
+      // Two-pointer sliding window: untuk tiap right, advance left sampai
+      // window (left..right) semua dalam windowDays. Karena sorted by date,
+      // semua row di [left..right] otomatis ≤ windowDays dari sorted[right].
+      let left = 0;
+      let markedUpTo = -1; // index terakhir yang udah di-mark, biar gak repeat O(n²)
+      for (let right = 1; right < dated.length; right++) {
+        while (left < right) {
+          const d = daysBetween(dated[left].tgl_sp2d, dated[right].tgl_sp2d);
+          if (d !== null && d <= windowDays) break;
+          left++;
+        }
+        if (left < right) {
+          // [left..right] semua dalam window. Mark yang belum.
+          const start = Math.max(left, markedUpTo + 1);
+          for (let k = start; k <= right; k++) {
+            inWindow.add(dated[k]._idx);
           }
+          markedUpTo = right;
         }
       }
-      for (const r of sorted) {
+
+      // Peers per row: nama no_sp2d row lain yang juga in-window di cluster ini.
+      const peersInCluster: string[] = dated
+        .filter((r) => inWindow.has(r._idx))
+        .map((r) => r.no_sp2d);
+      for (const r of dated) {
         if (!inWindow.has(r._idx)) continue;
-        const peers = sorted
-          .filter((p) => p._idx !== r._idx && inWindow.has(p._idx))
-          .map((p) => p.no_sp2d);
+        const peers = peersInCluster.filter((p) => p !== r.no_sp2d);
         hits.push({
           sp2dIdx: r._idx,
           severity,
