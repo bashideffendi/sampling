@@ -79,9 +79,16 @@ export function computeSkewness(values: number[]): SkewnessStats {
   const mid = Math.floor(n / 2);
   const medianRaw =
     n % 2 === 0 ? (sortedAsc[mid - 1] + sortedAsc[mid]) / 2 : sortedAsc[mid];
-  const medianSafe = medianRaw === 0 ? 1 : medianRaw;
   const max = sortedAsc[n - 1];
-  const maxOverMedian = max / medianSafe;
+  // M-06: kalau median=0 (>50% populasi bernilai 0 — kasus realistik di
+  // belanja modal jarang), eksplisit Infinity + isExtreme=true biar warning
+  // skewness akurat. Sebelumnya medianSafe=1 nyembunyikan distribusi degenerate.
+  let maxOverMedian: number;
+  if (medianRaw === 0) {
+    maxOverMedian = max > 0 ? Infinity : 0;
+  } else {
+    maxOverMedian = max / medianRaw;
+  }
 
   const isExtreme = cv > 2 || maxOverMedian > 100;
   return { cv, maxOverMedian, isExtreme };
@@ -109,6 +116,16 @@ export function musSampleSize(param: MUSParam): MUSSampleSize {
     );
   }
   const nRaw = (bookValue * rf) / denom;
+  // M-08: kalau denom hampir nol (TM−EF×EM ~ 0.001 × TM), nRaw bisa raksasa
+  // (mis. BV 1T / denom 1000 = 1jt sample). Throw clear error supaya auditor
+  // tahu input gak feasible.
+  if (nRaw > 100_000) {
+    throw new Error(
+      `MUS: n hasil ${Math.ceil(nRaw)} tidak feasible. ` +
+        `TM−EF×EM = ${denom.toLocaleString("id-ID")} terlalu kecil relatif BV. ` +
+        `Naikkan TM atau turunkan EM.`,
+    );
+  }
   const n = Math.max(1, Math.ceil(nRaw));
   const interval = tolerableMisstatement / rf;
   return { n, interval, rf, bookValue, expectedFactor: expansionFactor };

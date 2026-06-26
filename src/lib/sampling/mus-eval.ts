@@ -136,9 +136,18 @@ export function computeUML(param: UMLParam): UMLResult {
   let sumIncrementalAllowance = 0;
   for (let k = 1; k <= poolProjected.length; k++) {
     const factor = incrementalAllowance(confidence, k); // RF(k) - RF(k-1)
-    // IA contribution = PM × (RF(k) - RF(k-1) - 1)
+    // M-09: AICPA invariant — factor (incremental RF) selalu ≥ 1. Kalau ada
+    // bug di rf-table, throw eksplisit BUKAN silent clamp ke 0 yang nyembunyikan
+    // miscompute.
+    if (factor < 1) {
+      throw new Error(
+        `MUS UML: rf-table invariant violation — incrementalAllowance(${confidence}, ${k}) = ${factor} < 1`,
+      );
+    }
+    // IA contribution = PM × (RF(k) - RF(k-1) - 1). Karena factor ≥ 1 dan
+    // projectedMisstatement > 0 (sudah difilter), ia selalu ≥ 0.
     const ia = poolProjected[k - 1].projectedMisstatement * (factor - 1);
-    sumIncrementalAllowance += Math.max(0, ia);
+    sumIncrementalAllowance += ia;
   }
 
   const uml =

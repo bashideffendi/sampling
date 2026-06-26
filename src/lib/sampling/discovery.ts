@@ -43,6 +43,16 @@ export function discoverySampleSize(param: DiscoveryParam): DiscoverySampleSize 
   const alpha = 1 - confidenceLevel;
   // n = ln(α) / ln(1 - p)
   const nRaw = Math.log(alpha) / Math.log(1 - expectedOccurrenceRate);
+  // M-05: kalau p sangat kecil (mis. 0.0001), nRaw bisa raksasa (>> populationSize).
+  // Throw clear error supaya auditor tahu p-nya gak feasible buat discovery —
+  // suggest attribute sampling atau revisi p.
+  if (nRaw > populationSize * 10) {
+    throw new Error(
+      `Discovery: expectedOccurrenceRate ${expectedOccurrenceRate} terlalu kecil — ` +
+        `nRaw ≈ ${Math.ceil(nRaw)} jauh melebihi populationSize ${populationSize}. ` +
+        `Pertimbangkan attribute sampling atau revisi p ke nilai lebih besar.`,
+    );
+  }
   const n = Math.min(populationSize, Math.max(1, Math.ceil(nRaw)));
   return { n, alpha, expectedRate: expectedOccurrenceRate };
 }

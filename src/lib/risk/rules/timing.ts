@@ -165,6 +165,15 @@ export const LIBUR_NASIONAL_2026: ReadonlyArray<string> = [
   "2026-12-25", // Natal
 ];
 
+/**
+ * Set tanggal libur yang estimasi (lunar/Islamic 2026 — SKB final mungkin
+ * geser ±1 hari). Dipakai buat tandain di reason rule biar auditor verify.
+ */
+export const ESTIMATED_LIBUR_2026: ReadonlySet<string> = new Set([
+  "2026-01-16", "2026-02-17", "2026-03-19", "2026-03-20", "2026-03-21",
+  "2026-05-27", "2026-05-31", "2026-06-16", "2026-08-25",
+]);
+
 export const LIBUR_NASIONAL_ALL: ReadonlyArray<string> = [
   ...LIBUR_NASIONAL_2024,
   ...LIBUR_NASIONAL_2025,
@@ -359,14 +368,17 @@ export const timing_pre_libur_panjang: Rule = {
       const tgl = getTglSp2d(row);
       const target = findPreLiburTarget(tgl);
       if (!target) continue;
+      const isEstimated = ESTIMATED_LIBUR_2026.has(target.libur);
+      const estimateNote = isEstimated ? " (estimasi — verifikasi SKB 3 Menteri)" : "";
       hits.push({
         sp2dIdx: getIdx(row, i),
-        reason: `SP2D ${tgl} dicairkan ${target.diffDays} hari sebelum libur nasional ${target.libur}.`,
+        reason: `SP2D ${tgl} dicairkan ${target.diffDays} hari sebelum libur nasional ${target.libur}${estimateNote}.`,
         severity: "low",
         ref: {
           tgl_sp2d: tgl,
           libur_target: target.libur,
           diff_days: target.diffDays,
+          estimated: isEstimated,
         },
       });
     }
