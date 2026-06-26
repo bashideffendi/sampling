@@ -28,7 +28,14 @@ import { vendorKey as sharedVendorKey } from "./vendor";
 // Helpers (exported buat test + reuse rule lain)
 // ──────────────────────────────────────────────────────────────────────────────
 
-/** Ambil prefix akun 4-digit numerik (gabungkan separator). "5.1.02.01" → "5102". */
+/**
+ * Ambil prefix akun 4-DIGIT NUMERIK (gabungkan separator). "5.1.02.01" → "5102".
+ * Pakai buat group akun level-2 BAS (mis. Benford per akun).
+ *
+ * BEDA dengan `akunPrefix4` di vendor.ts yang return 4-SEGMENT dot-separated
+ * ("5.1.02.01" — level-3 BAS, granular per OPD×akun). Dua function intentional
+ * berbeda, bukan duplikasi.
+ */
 export function akun4Prefix(kodeRek: string | undefined | null): string {
   if (!kodeRek) return "__UNKNOWN__";
   const digits = String(kodeRek).replace(/[^0-9]/g, "");
@@ -297,8 +304,12 @@ const statisticalBenfordPerAkun: Rule = {
         .slice()
         .sort((a, b) => b.nilai - a.nilai)
         .slice(0, 5)
-        .map((r) => r._idx);
-      // Pick row pertama sebagai anchor sp2dIdx (UI butuh single _idx buat link).
+        .map((r) => r._idx)
+        .filter((idx): idx is number => typeof idx === "number");
+      // M-10: kalau semua row _idx undefined (salah aggregate upstream),
+      // sampleIdxs[0] bakal undefined → emit hit dengan sp2dIdx undefined →
+      // UI breaks. Skip akun ini supaya silent miss daripada crash.
+      if (sampleIdxs.length === 0) continue;
       hits.push({
         sp2dIdx: sampleIdxs[0],
         severity: "low",

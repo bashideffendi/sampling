@@ -77,7 +77,13 @@ export function vendorKey(row: SP2DRow): string | null {
   return `name:${name}`;
 }
 
-/** Ambil prefix akun (4 digit pertama) — buat group "akun sejenis". */
+/**
+ * Ambil prefix akun 4-SEGMENT dot-separated. "5.1.02.01.001" → "5.1.02.01".
+ * Pakai buat group level-3 BAS (granular per OPD×akun di vendor_concentration).
+ *
+ * BEDA dengan `akun4Prefix` di statistical.ts yang return 4-DIGIT numerik
+ * ("5102" — level-2 BAS, lebih kasar). Dua function intentional berbeda.
+ */
 export function akunPrefix4(kodeRek: string | undefined | null): string {
   if (!kodeRek) return "";
   // pertahankan separator titik kalau ada: "5.1.02.01.001" → "5.1.02.01".

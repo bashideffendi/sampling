@@ -192,8 +192,21 @@ export function findPreLiburTarget(
   if (!sp2d) return null;
   const sp2dTs = Date.UTC(sp2d.y, sp2d.m - 1, sp2d.d);
   const ONE_DAY = 24 * 60 * 60 * 1000;
+  // Short-circuit: jendela 1-3 hari pre-libur cuma relevan di tahun sama
+  // (atau tahun depan kalau sp2d di akhir Des → 1-3 Jan tahun depan).
+  // Skip libur di tahun yang lebih dari 1 tahun beda — hemat scan ~3x.
+  const sp2dYear = sp2d.y;
 
   for (const libur of liburList) {
+    // String prefix check cepat: "2025-..." → year 2025.
+    const liburYearPrefix = libur.slice(0, 4);
+    const liburYear = Number(liburYearPrefix);
+    if (
+      Number.isFinite(liburYear) &&
+      (liburYear < sp2dYear || liburYear > sp2dYear + 1)
+    ) {
+      continue;
+    }
     const lp = parseISODate(libur);
     if (!lp) continue;
     const liburTs = Date.UTC(lp.y, lp.m - 1, lp.d);

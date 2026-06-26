@@ -109,16 +109,25 @@ export function classifyPengadaan(
  *  - 57xx Belanja Bantuan Sosial
  *  - kode_rek / uraian mengandung 'honor', 'perjalanan dinas', 'perjadin'
  */
+/**
+ * Akun yang DI-EXEMPT dari rule heuristik nilai (round-number, dst):
+ * - Hibah / Bansos / Honor / Perjalanan Dinas → angka bulat wajar (lumpsum SBM).
+ *
+ * CATATAN BAS: kode prefix beda per skema BAS pemda:
+ *   Permendagri 13/2006 (3-digit, mostly K/L pusat + pemda lama):
+ *     56xx = Hibah, 57xx = Bansos
+ *   Permendagri 90/2019 jo Kepmendagri 050-5889/2021 (level-3, mayoritas pemda
+ *   sejak TA 2022):
+ *     5.1.05 → strip '5105xx' = Hibah
+ *     5.1.06 → strip '5106xx' = Bansos
+ *     5.1.07 = Bagi Hasil (BUKAN bansos — JANGAN exempt)
+ *
+ * Kalau pemda lo masih pakai BAS 13/2006 ATAU campuran transisi, prefix
+ * '5105'/'5106' bisa kebetulan jadi sub-kode lain (mis. di 13/2006 '5106' bisa
+ * Pemeliharaan). Audit silakan verify ke uraian sebelum trust exemption.
+ */
 export function isExemptAccount(row: SP2DRow): boolean {
   const k = (row.kode_rek ?? "").replace(/[^0-9]/g, "");
-  // Permendagri 13/2006 (3-digit prefix): 56=hibah, 57=bansos.
-  // Permendagri 90/2019 jo Kepmendagri 050-5889/2021 (5.1.x level):
-  //   5.1.05 → strip jadi '5105xx' = Belanja Hibah
-  //   5.1.06 → strip jadi '5106xx' = Belanja Bantuan Sosial
-  //   (5.1.07 = Bagi Hasil, BUKAN bansos — gak di-exempt)
-  // FIX v0.3.14: sebelumnya salah pakai 5106/5107 (5107 = Bagi Hasil, bukan
-  // lump-sum SBM; sementara hibah 5105 ke-skip dari exempt → false-positive
-  // round-number).
   if (k.startsWith("56") || k.startsWith("57")) return true;
   if (k.startsWith("5105") || k.startsWith("5106")) return true;
   const blob = `${row.uraian ?? ""} ${row.kode_rek ?? ""} ${row.jenis_spm ?? ""}`.toLowerCase();
