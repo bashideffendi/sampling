@@ -43,3 +43,8 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 .idea
+
+# data pemda (jangan commit — sensitif)
+/Data Realisasi Master *.xlsx
+/Kodering LRA.xlsx
+*.xlsx
