@@ -116,8 +116,16 @@ export function isRutinGajiTunjangan(row: SP2DRow): boolean {
 // Tanggal merah single (mis 17 Agt) tetap dimasukin karena 1-3 hari sebelum =
 // burst pre-libur.
 //
-// TODO TA 2026: refresh tabel setelah SKB diumumkan.
+// COVERAGE: 2024 + 2025 + 2026 (TA aktif + adjacent untuk audit lintas tahun).
+// 2026 lunar holidays estimate (SKB final mungkin geser ±1 hari).
 // ──────────────────────────────────────────────────────────────────────────────
+
+export const LIBUR_NASIONAL_2024: ReadonlyArray<string> = [
+  "2024-01-01", "2024-02-08", "2024-02-10", "2024-03-11",
+  "2024-03-29", "2024-04-10", "2024-04-11", "2024-05-01",
+  "2024-05-09", "2024-05-23", "2024-06-01", "2024-06-17",
+  "2024-07-07", "2024-08-17", "2024-09-16", "2024-12-25",
+];
 
 export const LIBUR_NASIONAL_2025: ReadonlyArray<string> = [
   "2025-01-01", // Tahun Baru Masehi
@@ -138,13 +146,38 @@ export const LIBUR_NASIONAL_2025: ReadonlyArray<string> = [
   "2025-12-25", // Natal
 ];
 
+export const LIBUR_NASIONAL_2026: ReadonlyArray<string> = [
+  "2026-01-01", // Tahun Baru Masehi
+  "2026-01-16", // Isra Mikraj (estimate)
+  "2026-02-17", // Imlek (estimate)
+  "2026-03-19", // Nyepi (estimate)
+  "2026-03-20", // Idul Fitri 1 (estimate)
+  "2026-03-21", // Idul Fitri 2 (estimate)
+  "2026-04-03", // Wafat Isa Almasih
+  "2026-05-01", // Hari Buruh
+  "2026-05-14", // Kenaikan Isa Almasih
+  "2026-05-31", // Waisak (estimate)
+  "2026-05-27", // Idul Adha (estimate)
+  "2026-06-01", // Pancasila
+  "2026-06-16", // Tahun Baru Hijriyah (estimate)
+  "2026-08-17", // Kemerdekaan
+  "2026-08-25", // Maulid Nabi (estimate)
+  "2026-12-25", // Natal
+];
+
+export const LIBUR_NASIONAL_ALL: ReadonlyArray<string> = [
+  ...LIBUR_NASIONAL_2024,
+  ...LIBUR_NASIONAL_2025,
+  ...LIBUR_NASIONAL_2026,
+];
+
 /**
  * Return tanggal libur terdekat (1-3 hari ke depan) kalau ISO ada di window
  * pre-libur. Null kalau tidak.
  */
 export function findPreLiburTarget(
   iso: string,
-  liburList: ReadonlyArray<string> = LIBUR_NASIONAL_2025,
+  liburList: ReadonlyArray<string> = LIBUR_NASIONAL_ALL,
 ): { libur: string; diffDays: number } | null {
   const sp2d = parseISODate(iso);
   if (!sp2d) return null;
@@ -166,7 +199,7 @@ export function findPreLiburTarget(
 /** True kalau ISO di-range 1-3 hari kalender sebelum salah satu tanggal merah. */
 export function isPreLiburPanjang(
   iso: string,
-  liburList: ReadonlyArray<string> = LIBUR_NASIONAL_2025,
+  liburList: ReadonlyArray<string> = LIBUR_NASIONAL_ALL,
 ): boolean {
   return findPreLiburTarget(iso, liburList) !== null;
 }

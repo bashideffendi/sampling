@@ -324,7 +324,7 @@ export default function RiskHelperPage() {
                     Baris ke-flag
                   </span>
                   <span className="ml-2 serif text-base text-[var(--color-ink)] tnum">
-                    {riskReport.uniqueFlagged.size.toLocaleString("id-ID")}
+                    {riskReport.uniqueFlagged.length.toLocaleString("id-ID")}
                   </span>
                 </span>
                 <span>

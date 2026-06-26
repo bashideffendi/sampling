@@ -96,8 +96,8 @@ describe("runRiskRules", () => {
     const rows = [mkRow(0), mkRow(1), mkRow(2)];
     const report = runRiskRules([alwaysHit, overlappingHit], mkCtx(rows));
     // alwaysHit kena {0,1,2}, overlappingHit kena {0,1} → union {0,1,2}
-    expect(report.uniqueFlagged.size).toBe(3);
-    expect([...report.uniqueFlagged].sort()).toEqual([0, 1, 2]);
+    expect(report.uniqueFlagged.length).toBe(3);
+    expect([...report.uniqueFlagged]).toEqual([0, 1, 2]); // engine sort asc
     // tapi totalHits TETEP raw count (3 + 2 = 5), bukan dedup
     expect(report.totalHits).toBe(5);
   });
@@ -146,6 +146,6 @@ describe("runRiskRules", () => {
     const report = runRiskRules([], mkCtx([mkRow(0)]));
     expect(report.results).toHaveLength(0);
     expect(report.totalHits).toBe(0);
-    expect(report.uniqueFlagged.size).toBe(0);
+    expect(report.uniqueFlagged.length).toBe(0);
   });
 });

@@ -40,7 +40,7 @@ export function RiskHelperLink() {
               <>
                 {" "}
                 <span className="text-[var(--color-ink)]">
-                  Run terakhir: {riskReport.uniqueFlagged.size.toLocaleString("id-ID")} baris ke-flag.
+                  Run terakhir: {riskReport.uniqueFlagged.length.toLocaleString("id-ID")} baris ke-flag.
                 </span>
               </>
             )}

@@ -66,7 +66,9 @@ export function runRiskRules(rules: Rule[], ctx: RuleContext): RiskReport {
   return {
     results,
     totalHits,
-    uniqueFlagged,
+    // Konversi Set internal → readonly Array sorted asc. JSON-serializable +
+    // stable order untuk export/diff/snapshot.
+    uniqueFlagged: [...uniqueFlagged].sort((a, b) => a - b),
     runAt: new Date().toISOString(),
   };
 }

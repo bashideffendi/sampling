@@ -116,7 +116,10 @@ export interface RuleResult {
 export interface RiskReport {
   results: RuleResult[];
   totalHits: number;
-  /** Set _idx unik yang ke-flag minimal satu rule. */
-  uniqueFlagged: Set<number>;
+  /**
+   * Array _idx unik yang ke-flag minimal satu rule (sorted asc).
+   * v0.3.12: dulu Set<number> — gak JSON-serializable, blocking export/persist.
+   */
+  uniqueFlagged: readonly number[];
   runAt: string; // ISO
 }

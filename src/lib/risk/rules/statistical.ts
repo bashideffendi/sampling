@@ -421,9 +421,13 @@ const statisticalVendorConcentrationGini: Rule = {
         }
       }
       const dominantShare = opdTotal > 0 ? dominantTotal / opdTotal : 0;
+      // v0.3.12: trigger CUMA on gini > 0.7. Dulu juga fire kalau
+      // dominantShare > 50%, tapi itu overlap sama `vendor_concentration_dominant`
+      // di vendor.ts (group per OPD×akun, lebih granular). Gini = inequality
+      // distribusi (≥5 vendor), signal unique. dominantShare di-keep di ref
+      // sebagai konteks tapi gak jadi trigger.
       const hitGini = gini > 0.7;
-      const hitShare = dominantShare > 0.5;
-      if (!hitGini && !hitShare) continue;
+      if (!hitGini) continue;
 
       const dominantRows = vendorRows.get(dominantVk) ?? [];
       for (const r of dominantRows) {
@@ -442,7 +446,7 @@ const statisticalVendorConcentrationGini: Rule = {
             dominantTotal,
             dominantShare,
             gini,
-            triggeredBy: hitGini && hitShare ? "gini+share" : hitGini ? "gini" : "share",
+            triggeredBy: "gini",
           },
         });
       }
